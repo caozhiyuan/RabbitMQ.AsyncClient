@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using RabbitMQ.Client.Events;
 
 namespace RabbitMQ.Client.Test
 {
@@ -35,6 +36,14 @@ namespace RabbitMQ.Client.Test
                 await channel.ExchangeDeclare("asynctest", "topic");
                 await channel.QueueDeclare("asynctest", true, false, false, null);
                 await channel.QueueBind("asynctest", "asynctest", "asynctest", null);
+
+                AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.Received += async (ch, ea) =>
+                {
+                    Console.WriteLine(Encoding.UTF8.GetString(ea.Body));
+                    await channel.BasicAck(ea.DeliveryTag, false);
+                };
+                var consumerTag = await channel.BasicConsume("asynctest", false, consumer);         
 
                 var messageBodyBytes = Encoding.UTF8.GetBytes(msg);
 
