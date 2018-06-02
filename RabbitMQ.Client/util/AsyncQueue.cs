@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RabbitMQ.Client.Impl
+namespace RabbitMQ.Util
 {
     public class AsyncQueue<T>
     {
