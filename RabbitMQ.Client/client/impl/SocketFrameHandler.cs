@@ -71,7 +71,6 @@ namespace RabbitMQ.Client.Impl
         private Stream m_netstream;
         private readonly object _semaphore = new object();
         private bool _closed;
-        private SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
         private readonly Func<AddressFamily, ITcpClient> m_socketFactory;
         private readonly int m_connectionTimeout;
         private readonly int m_readTimeout;
@@ -257,15 +256,7 @@ namespace RabbitMQ.Client.Impl
 
         private async Task WriteFrameBuffer(byte[] buffer)
         {
-            await semaphoreSlim.WaitAsync();
-            try
-            {
-                await m_netstream.WriteAsync(buffer, 0, buffer.Length);
-            }
-            finally
-            {
-                semaphoreSlim.Release();
-            }
+            await m_netstream.WriteAsync(buffer, 0, buffer.Length);
         }
 
         private bool ShouldTryIPv6(AmqpTcpEndpoint endpoint)
