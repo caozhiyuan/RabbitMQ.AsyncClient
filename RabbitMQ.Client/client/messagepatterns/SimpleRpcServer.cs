@@ -39,6 +39,7 @@
 //---------------------------------------------------------------------------
 
 using System;
+using System.Threading.Tasks;
 using RabbitMQ.Client.Content;
 using RabbitMQ.Client.Events;
 
@@ -113,7 +114,7 @@ namespace RabbitMQ.Client.MessagePatterns
     ///</para>
     ///</remarks>
     ///<see cref="SimpleRpcClient"/>
-    public class SimpleRpcServer : IDisposable
+    public class SimpleRpcServer
     {
         protected Subscription m_subscription;
 
@@ -143,9 +144,9 @@ namespace RabbitMQ.Client.MessagePatterns
         ///<remarks>
         /// Acts by calling Close() on the server's Subscription object.
         ///</remarks>
-        public void Close()
+        public Task Close()
         {
-            m_subscription.Close();
+            return m_subscription.Close();
         }
 
         ///<summary>Called by ProcessRequest(), this is the most
@@ -423,9 +424,9 @@ namespace RabbitMQ.Client.MessagePatterns
         ///<summary>Implement the IDisposable interface, permitting
         ///SimpleRpcServer instances to be used in using
         ///statements.</summary>
-        void IDisposable.Dispose()
+        public Task Dispose()
         {
-            Close();
+            return Close();
         }
     }
 }
