@@ -54,7 +54,7 @@ namespace RabbitMQ.Client.Test
                     if (mm % 10000 == 0)
                     {
                         sw0.Stop();
-                        Console.Write($" {mm}recv {sw0.ElapsedMilliseconds}ms {Encoding.UTF8.GetString(ea.Body)}");
+                        Console.WriteLine($" {mm}recv {sw0.ElapsedMilliseconds}ms {Encoding.UTF8.GetString(ea.Body)}");
                         sw0.Restart();
                     }
                     await channel.BasicAck(ea.DeliveryTag, false);
