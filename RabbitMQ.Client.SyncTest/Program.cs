@@ -73,7 +73,7 @@ namespace RabbitMQ.Client.SyncTest
                     Stopwatch sw = new Stopwatch();
                     sw.Start();
 
-                    const int c = 20000;
+                    const int c = 10000;
                     CountdownEvent k = new CountdownEvent(c);
                     Parallel.For(0, c, (i) =>
                     {
