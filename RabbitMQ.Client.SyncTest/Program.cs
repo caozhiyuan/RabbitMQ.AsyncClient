@@ -36,17 +36,27 @@ namespace RabbitMQ.Client.SyncTest
             };
 
             var conn = factory.CreateConnection();
+
+            var consumconn = factory.CreateConnection();
             try
             {
                 IModel channel = conn.CreateModel();
                 channel.ExchangeDeclare("asynctest", "topic");
                 channel.QueueDeclare("asynctest", true, false, false, null);
                 channel.QueueBind("asynctest", "asynctest", "asynctest", null);
+                channel.FlowControl += (s, e) =>
+                {
+                    Console.WriteLine("FlowControl");
+                };
+
+
+                IModel consumchannel = consumconn.CreateModel();
+                consumchannel.BasicQos(0, 100, false);
+                AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(consumchannel);
 
                 int mm = 0;
                 Stopwatch sw0 = new Stopwatch();
                 sw0.Start();
-                AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.Received += (ch, ea) =>
                 {
                     Interlocked.Increment(ref mm);
@@ -56,16 +66,11 @@ namespace RabbitMQ.Client.SyncTest
                         Console.WriteLine($" {mm}recv {sw0.ElapsedMilliseconds}ms {Encoding.UTF8.GetString(ea.Body)}");
                         sw0.Restart();
                     }
-                    channel.BasicAck(ea.DeliveryTag, false);
+                    consumchannel.BasicAck(ea.DeliveryTag, false);
                     return Task.CompletedTask;
                 };
-                var consumerTag = channel.BasicConsume("asynctest", false, consumer);
+                var consumerTag = consumchannel.BasicConsume("asynctest", false, consumer);
                 Console.WriteLine($"consumerTag {consumerTag}");
-
-                channel.FlowControl += (s, e) =>
-                {
-                    Console.WriteLine("FlowControl");
-                };
 
                 int id = 0;
                 while (true)

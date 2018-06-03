@@ -35,15 +35,24 @@ namespace RabbitMQ.Client.Test
             };
 
             var conn = await factory.CreateConnection();
+            var consumconn = await factory.CreateConnection();
+
             try
             {
+
                 IModel channel = await conn.CreateModel();
                 await channel.ExchangeDeclare("asynctest", "topic");
                 await channel.QueueDeclare("asynctest", true, false, false, null);
                 await channel.QueueBind("asynctest", "asynctest", "asynctest", null);
+                channel.FlowControl += (s, e) =>
+                {
+                    Console.WriteLine("FlowControl");
+                    return Task.CompletedTask;
+                };
 
-                await channel.BasicQos(0, 100, false);
-                AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
+                IModel consumchannel = await consumconn.CreateModel();
+                await consumchannel.BasicQos(0, 100, false);
+                AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(consumchannel);
 
                 int mm = 0;
                 Stopwatch sw0 = new Stopwatch();
@@ -57,16 +66,11 @@ namespace RabbitMQ.Client.Test
                         Console.WriteLine($" {mm}recv {sw0.ElapsedMilliseconds}ms {Encoding.UTF8.GetString(ea.Body)}");
                         sw0.Restart();
                     }
-                    await channel.BasicAck(ea.DeliveryTag, false);
+                    await consumchannel.BasicAck(ea.DeliveryTag, false);
                 };
-                var consumerTag = await channel.BasicConsume("asynctest", false, consumer);
+                var consumerTag = await consumchannel.BasicConsume("asynctest", false, consumer);
                 Console.WriteLine($"consumerTag {consumerTag}");
 
-                channel.FlowControl += (s, e) =>
-                {
-                    Console.WriteLine("FlowControl");
-                    return Task.CompletedTask;
-                };
                 int id = 0;
                 while (true)
                 {
@@ -94,12 +98,19 @@ namespace RabbitMQ.Client.Test
                     });
                     k.Wait();
                     Console.WriteLine("mqtest " + sw.ElapsedMilliseconds);
-                    await Task.Delay(5000);
+                    await Task.Delay(500);
                 }
             }
             finally
             {
-                await conn.Dispose();
+                try
+                {
+                    await consumconn.Dispose();
+                }
+                finally
+                {
+                    await conn.Dispose();
+                }
             }
         }
     }
