@@ -1,11 +1,13 @@
-﻿namespace RabbitMQ.Client.Impl
+﻿using System.Threading.Tasks;
+
+namespace RabbitMQ.Client.Impl
 {
     internal class AsyncConsumerDispatcher : IConsumerDispatcher
     {
         private readonly ModelBase model;
-        private readonly AsyncConsumerWorkService workService;
+        private readonly ConsumerWorkService workService;
 
-        public AsyncConsumerDispatcher(ModelBase model, AsyncConsumerWorkService ws)
+        public AsyncConsumerDispatcher(ModelBase model, ConsumerWorkService ws)
         {
             this.model = model;
             this.workService = ws;
@@ -17,16 +19,15 @@
             IsShutdown = true;
         }
 
-        public void Shutdown()
+        public Task Shutdown()
         {
-            // necessary evil
-            this.workService.Stop().GetAwaiter().GetResult();
+            return this.workService.Stop();
         }
 
-        public void Shutdown(IModel model)
+        public Task Shutdown(IModel model)
         {
             // necessary evil
-            this.workService.Stop(model).GetAwaiter().GetResult();
+            return this.workService.Stop(model);
         }
 
         public bool IsShutdown

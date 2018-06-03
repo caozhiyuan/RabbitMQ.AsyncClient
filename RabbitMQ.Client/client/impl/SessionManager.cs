@@ -159,7 +159,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public void HandleSessionShutdown(object sender, ShutdownEventArgs reason)
+        public Task HandleSessionShutdown(object sender, ShutdownEventArgs reason)
         {
             lock (m_sessionMap)
             {
@@ -168,6 +168,7 @@ namespace RabbitMQ.Client.Impl
                 Ints.Free(session.ChannelNumber);
                 CheckAutoClose();
             }
+            return Task.CompletedTask;
         }
 
         public ISession Lookup(int number)

@@ -76,17 +76,17 @@ namespace RabbitMQ.Client.Impl
 
         private readonly SynchronizedList<ulong> m_unconfirmedSet = new SynchronizedList<ulong>();
 
-        private EventHandler<BasicAckEventArgs> m_basicAck;
-        private EventHandler<BasicNackEventArgs> m_basicNack;
-        private EventHandler<EventArgs> m_basicRecoverOk;
-        private EventHandler<BasicReturnEventArgs> m_basicReturn;
-        private EventHandler<CallbackExceptionEventArgs> m_callbackException;
-        private EventHandler<FlowControlEventArgs> m_flowControl;
-        private EventHandler<ShutdownEventArgs> m_modelShutdown;
+        private AsyncEventHandler<BasicAckEventArgs> m_basicAck;
+        private AsyncEventHandler<BasicNackEventArgs> m_basicNack;
+        private AsyncEventHandler<EventArgs> m_basicRecoverOk;
+        private AsyncEventHandler<BasicReturnEventArgs> m_basicReturn;
+        private AsyncEventHandler<CallbackExceptionEventArgs> m_callbackException;
+        private AsyncEventHandler<FlowControlEventArgs> m_flowControl;
+        private AsyncEventHandler<ShutdownEventArgs> m_modelShutdown;
 
         private bool m_onlyAcksReceived = true;
 
-        private EventHandler<EventArgs> m_recovery;
+        private AsyncEventHandler<EventArgs> m_recovery;
 
         public IConsumerDispatcher ConsumerDispatcher { get; private set; }
 
@@ -96,15 +96,7 @@ namespace RabbitMQ.Client.Impl
 
         public ModelBase(ISession session, ConsumerWorkService workService)
         {
-            var asyncConsumerWorkService = workService as AsyncConsumerWorkService;
-            if (asyncConsumerWorkService != null)
-            {
-                ConsumerDispatcher = new AsyncConsumerDispatcher(this, asyncConsumerWorkService);
-            }
-            else
-            {
-                ConsumerDispatcher = new ConcurrentConsumerDispatcher(this, workService);
-            }
+            ConsumerDispatcher = new AsyncConsumerDispatcher(this, workService);
 
             Initialise(session);
         }
@@ -130,7 +122,7 @@ namespace RabbitMQ.Client.Impl
             set { m_continuationTimeout = value; }
         }
 
-        public event EventHandler<BasicAckEventArgs> BasicAcks
+        public event AsyncEventHandler<BasicAckEventArgs> BasicAcks
         {
             add
             {
@@ -148,7 +140,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<BasicNackEventArgs> BasicNacks
+        public event AsyncEventHandler<BasicNackEventArgs> BasicNacks
         {
             add
             {
@@ -166,7 +158,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<EventArgs> BasicRecoverOk
+        public event AsyncEventHandler<EventArgs> BasicRecoverOk
         {
             add
             {
@@ -184,7 +176,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<BasicReturnEventArgs> BasicReturn
+        public event AsyncEventHandler<BasicReturnEventArgs> BasicReturn
         {
             add
             {
@@ -202,7 +194,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<CallbackExceptionEventArgs> CallbackException
+        public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackException
         {
             add
             {
@@ -220,7 +212,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<FlowControlEventArgs> FlowControl
+        public event AsyncEventHandler<FlowControlEventArgs> FlowControl
         {
             add
             {
@@ -238,7 +230,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<ShutdownEventArgs> ModelShutdown
+        public event AsyncEventHandler<ShutdownEventArgs> ModelShutdown
         {
             add
             {
@@ -268,7 +260,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<EventArgs> Recovery
+        public event AsyncEventHandler<EventArgs> Recovery
         {
             add
             {
@@ -329,7 +321,7 @@ namespace RabbitMQ.Client.Impl
                     await _Private_ChannelClose(reason.ReplyCode, reason.ReplyText, 0, 0);
                 }                
                 await k.Wait(TimeSpan.FromMilliseconds(10000));
-                ConsumerDispatcher.Shutdown(this);
+                await ConsumerDispatcher.Shutdown(this);
             }
             catch (AlreadyClosedException)
             {
@@ -414,7 +406,7 @@ namespace RabbitMQ.Client.Impl
             return k.m_result;
         }
 
-        public abstract bool DispatchAsynchronous(Command cmd);
+        public abstract Task<bool> DispatchAsynchronous(Command cmd);
 
         public void Enqueue(IRpcContinuation k)
         {
@@ -436,11 +428,11 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public void FinishClose()
+        public async Task FinishClose()
         {
             if (CloseReason != null)
             {
-                Session.Close(CloseReason);
+                await Session.Close(CloseReason);
             }
             if (m_connectionStartCell != null)
             {
@@ -448,9 +440,9 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public void HandleCommand(ISession session, Command cmd)
+        public async Task HandleCommand(ISession session, Command cmd)
         {
-            if (!DispatchAsynchronous(cmd))// Was asynchronous. Already processed. No need to process further.
+            if (!await DispatchAsynchronous(cmd))// Was asynchronous. Already processed. No need to process further.
                 m_continuationQueue.Next().HandleCommand(cmd);
         }
 
@@ -474,24 +466,24 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public virtual void OnBasicAck(BasicAckEventArgs args)
+        public virtual async Task OnBasicAck(BasicAckEventArgs args)
         {
-            EventHandler<BasicAckEventArgs> handler;
+            AsyncEventHandler<BasicAckEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_basicAck;
             }
             if (handler != null)
             {
-                foreach (EventHandler<BasicAckEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<BasicAckEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicAck"));
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicAck"));
                     }
                 }
             }
@@ -499,24 +491,24 @@ namespace RabbitMQ.Client.Impl
             handleAckNack(args.DeliveryTag, args.Multiple, false);
         }
 
-        public virtual void OnBasicNack(BasicNackEventArgs args)
+        public virtual async Task OnBasicNack(BasicNackEventArgs args)
         {
-            EventHandler<BasicNackEventArgs> handler;
+            AsyncEventHandler<BasicNackEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_basicNack;
             }
             if (handler != null)
             {
-                foreach (EventHandler<BasicNackEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<BasicNackEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicNack"));
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicNack"));
                     }
                 }
             }
@@ -524,66 +516,66 @@ namespace RabbitMQ.Client.Impl
             handleAckNack(args.DeliveryTag, args.Multiple, true);
         }
 
-        public virtual void OnBasicRecoverOk(EventArgs args)
+        public virtual async Task OnBasicRecoverOk(EventArgs args)
         {
-            EventHandler<EventArgs> handler;
+            AsyncEventHandler<EventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_basicRecoverOk;
             }
             if (handler != null)
             {
-                foreach (EventHandler<EventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<EventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicRecover"));
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicRecover"));
                     }
                 }
             }
         }
 
-        public virtual void OnBasicReturn(BasicReturnEventArgs args)
+        public virtual async Task OnBasicReturn(BasicReturnEventArgs args)
         {
-            EventHandler<BasicReturnEventArgs> handler;
+            AsyncEventHandler<BasicReturnEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_basicReturn;
             }
             if (handler != null)
             {
-                foreach (EventHandler<BasicReturnEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<BasicReturnEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicReturn"));
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnBasicReturn"));
                     }
                 }
             }
         }
 
-        public virtual void OnCallbackException(CallbackExceptionEventArgs args)
+        public virtual async Task OnCallbackException(CallbackExceptionEventArgs args)
         {
-            EventHandler<CallbackExceptionEventArgs> handler;
+            AsyncEventHandler<CallbackExceptionEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_callbackException;
             }
             if (handler != null)
             {
-                foreach (EventHandler<CallbackExceptionEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<CallbackExceptionEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch
                     {
@@ -596,24 +588,24 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public virtual void OnFlowControl(FlowControlEventArgs args)
+        public virtual async Task OnFlowControl(FlowControlEventArgs args)
         {
-            EventHandler<FlowControlEventArgs> handler;
+            AsyncEventHandler<FlowControlEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_flowControl;
             }
             if (handler != null)
             {
-                foreach (EventHandler<FlowControlEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<FlowControlEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnFlowControl"));
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnFlowControl"));
                     }
                 }
             }
@@ -631,10 +623,10 @@ namespace RabbitMQ.Client.Impl
         ///shutdown event. See the definition of Enqueue() above.
         ///</para>
         ///</remarks>
-        public virtual void OnModelShutdown(ShutdownEventArgs reason)
+        public virtual async Task OnModelShutdown(ShutdownEventArgs reason)
         {
             m_continuationQueue.HandleModelShutdown(reason);
-            EventHandler<ShutdownEventArgs> handler;
+            AsyncEventHandler<ShutdownEventArgs> handler;
             lock (m_shutdownLock)
             {
                 handler = m_modelShutdown;
@@ -642,15 +634,15 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (EventHandler<ShutdownEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<ShutdownEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, reason);
+                        await h(this, reason);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnModelShutdown"));
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e, "OnModelShutdown"));
                     }
                 }
             }
@@ -659,13 +651,13 @@ namespace RabbitMQ.Client.Impl
             m_flowControlBlock.Set();
         }
 
-        public void OnSessionShutdown(object sender, ShutdownEventArgs reason)
+        public async Task OnSessionShutdown(object sender, ShutdownEventArgs reason)
         {
             this.ConsumerDispatcher.Quiesce();
             SetCloseReason(reason);
-            OnModelShutdown(reason);
+            await OnModelShutdown(reason);
             BroadcastShutdownToConsumers(m_consumers, reason);
-            this.ConsumerDispatcher.Shutdown(this);
+            await this.ConsumerDispatcher.Shutdown(this);
         }
 
         protected void BroadcastShutdownToConsumers(IDictionary<string, IBasicConsumer> cs, ShutdownEventArgs reason)
@@ -717,7 +709,7 @@ namespace RabbitMQ.Client.Impl
             uint frameMax,
             ushort heartbeat);
 
-        public void HandleBasicAck(ulong deliveryTag,
+        public Task HandleBasicAck(ulong deliveryTag,
             bool multiple)
         {
             var e = new BasicAckEventArgs
@@ -725,7 +717,7 @@ namespace RabbitMQ.Client.Impl
                 DeliveryTag = deliveryTag,
                 Multiple = multiple
             };
-            OnBasicAck(e);
+            return OnBasicAck(e);
         }
 
         public void HandleBasicCancel(string consumerTag, bool nowait)
@@ -839,7 +831,7 @@ namespace RabbitMQ.Client.Impl
             k.HandleCommand(null); // release the continuation.
         }
 
-        public void HandleBasicNack(ulong deliveryTag,
+        public async Task HandleBasicNack(ulong deliveryTag,
             bool multiple,
             bool requeue)
         {
@@ -847,17 +839,17 @@ namespace RabbitMQ.Client.Impl
             e.DeliveryTag = deliveryTag;
             e.Multiple = multiple;
             e.Requeue = requeue;
-            OnBasicNack(e);
+            await OnBasicNack(e);
         }
 
-        public void HandleBasicRecoverOk()
+        public async Task HandleBasicRecoverOk()
         {
             var k = (SimpleBlockingRpcContinuation)m_continuationQueue.Next();
-            OnBasicRecoverOk(new EventArgs());
+            await OnBasicRecoverOk(new EventArgs());
             k.HandleCommand(null);
         }
 
-        public void HandleBasicReturn(ushort replyCode,
+        public async Task HandleBasicReturn(ushort replyCode,
             string replyText,
             string exchange,
             string routingKey,
@@ -871,10 +863,10 @@ namespace RabbitMQ.Client.Impl
             e.RoutingKey = routingKey;
             e.BasicProperties = basicProperties;
             e.Body = body;
-            OnBasicReturn(e);
+            await OnBasicReturn(e);
         }
 
-        public void HandleChannelClose(ushort replyCode,
+        public async Task HandleChannelClose(ushort replyCode,
             string replyText,
             ushort classId,
             ushort methodId)
@@ -885,23 +877,23 @@ namespace RabbitMQ.Client.Impl
                 classId,
                 methodId));
 
-            Session.Close(CloseReason, false);
+            await Session.Close(CloseReason, false);
             try
             {
-                _Private_ChannelCloseOk().GetAwaiter().GetResult();
+                await _Private_ChannelCloseOk();
             }
             finally
             {
-                Session.Notify();
+                await Session.Notify();
             }
         }
 
-        public void HandleChannelCloseOk()
+        public Task HandleChannelCloseOk()
         {
-            FinishClose();
+            return FinishClose();
         }
 
-        public void HandleChannelFlow(bool active)
+        public async Task HandleChannelFlow(bool active)
         {
             if (active)
             {
@@ -912,19 +904,19 @@ namespace RabbitMQ.Client.Impl
                 m_flowControlBlock.Reset();
             }
 
-            _Private_ChannelFlowOk(active).GetAwaiter().GetResult();
+            await _Private_ChannelFlowOk(active);
 
-            OnFlowControl(new FlowControlEventArgs(active));
+            await OnFlowControl(new FlowControlEventArgs(active));
         }
 
-        public void HandleConnectionBlocked(string reason)
+        public async Task HandleConnectionBlocked(string reason)
         {
             var cb = ((Connection)Session.Connection);
 
-            cb.HandleConnectionBlocked(reason);
+            await cb.HandleConnectionBlocked(reason);
         }
 
-        public void HandleConnectionClose(ushort replyCode,
+        public async Task HandleConnectionClose(ushort replyCode,
             string replyText,
             ushort classId,
             ushort methodId)
@@ -936,8 +928,8 @@ namespace RabbitMQ.Client.Impl
                 methodId);
             try
             {
-                ((Connection)Session.Connection).InternalClose(reason);
-                _Private_ConnectionCloseOk().GetAwaiter().GetResult();
+                await ((Connection)Session.Connection).InternalClose(reason);
+                await _Private_ConnectionCloseOk();
                 SetCloseReason((Session.Connection).CloseReason);
             }
             catch (IOException)
@@ -1016,11 +1008,11 @@ namespace RabbitMQ.Client.Impl
             k.HandleCommand(null); // release the continuation.
         }
 
-        public void HandleConnectionUnblocked()
+        public async Task HandleConnectionUnblocked()
         {
             var cb = ((Connection)Session.Connection);
 
-            cb.HandleConnectionUnblocked();
+            await cb.HandleConnectionUnblocked();
         }
 
         public void HandleQueueDeclareOk(string queue,
@@ -1172,7 +1164,7 @@ namespace RabbitMQ.Client.Impl
             var asyncDispatcher = ConsumerDispatcher as AsyncConsumerDispatcher;
             if (asyncDispatcher != null)
             {
-                var asyncConsumer = consumer as IAsyncBasicConsumer;
+                var asyncConsumer = consumer as IBasicConsumer;
                 if (asyncConsumer == null)
                 {
                     // TODO: Friendly message

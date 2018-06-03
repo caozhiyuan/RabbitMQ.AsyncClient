@@ -63,9 +63,10 @@ namespace RabbitMQ.Client.Impl
         // presumably they improved the type checker with the new
         // release of the compiler.
 
-        public virtual void OnConnectionShutdown(object sender, ShutdownEventArgs reason)
+        public virtual Task OnConnectionShutdown(object sender, ShutdownEventArgs reason)
         {
             m_cell.TrySetResult(reason);
+            return Task.CompletedTask;
         }
 
         public virtual void OnModelShutdown(IModel sender, ShutdownEventArgs reason)

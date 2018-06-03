@@ -72,18 +72,18 @@ namespace RabbitMQ.Client.Framing.Impl
         private readonly EmptyOutboundFrame m_heartbeatFrame = new EmptyOutboundFrame();
 
         private AsyncAutoResetEvent m_appContinuation = new AsyncAutoResetEvent(false);
-        private EventHandler<CallbackExceptionEventArgs> m_callbackException;
-        private EventHandler<EventArgs> m_recoverySucceeded;
-        private EventHandler<ConnectionRecoveryErrorEventArgs> connectionRecoveryFailure;
+        private AsyncEventHandler<CallbackExceptionEventArgs> m_callbackException;
+        private AsyncEventHandler<EventArgs> m_recoverySucceeded;
+        private AsyncEventHandler<ConnectionRecoveryErrorEventArgs> connectionRecoveryFailure;
 
         private IDictionary<string, object> m_clientProperties;
 
         private volatile ShutdownEventArgs m_closeReason = null;
         private volatile bool m_closed = false;
 
-        private EventHandler<ConnectionBlockedEventArgs> m_connectionBlocked;
-        private EventHandler<ShutdownEventArgs> m_connectionShutdown;
-        private EventHandler<EventArgs> m_connectionUnblocked;
+        private AsyncEventHandler<ConnectionBlockedEventArgs> m_connectionBlocked;
+        private AsyncEventHandler<ShutdownEventArgs> m_connectionShutdown;
+        private AsyncEventHandler<EventArgs> m_connectionUnblocked;
 
         private IConnectionFactory m_factory;
         private IFrameHandler m_frameHandler;
@@ -134,15 +134,7 @@ namespace RabbitMQ.Client.Framing.Impl
             m_frameHandler = frameHandler;
             m_insist = insist;
 
-            var asyncConnectionFactory = factory as IAsyncConnectionFactory;
-            if (asyncConnectionFactory != null && asyncConnectionFactory.DispatchConsumersAsync)
-            {
-                ConsumerWorkService = new AsyncConsumerWorkService();
-            }
-            else
-            {
-                ConsumerWorkService = new ConsumerWorkService();
-            }
+            ConsumerWorkService = new ConsumerWorkService();
 
             m_sessionManager = new SessionManager(this, 0);
             m_session0 = new MainSession(this) { Handler = NotifyReceivedCloseOk };
@@ -153,7 +145,7 @@ namespace RabbitMQ.Client.Framing.Impl
 
         public Guid Id { get { return m_id; } }
 
-        public event EventHandler<EventArgs> RecoverySucceeded
+        public event AsyncEventHandler<EventArgs> RecoverySucceeded
         {
             add
             {
@@ -171,7 +163,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<CallbackExceptionEventArgs> CallbackException
+        public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackException
         {
             add
             {
@@ -189,7 +181,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<ConnectionBlockedEventArgs> ConnectionBlocked
+        public event AsyncEventHandler<ConnectionBlockedEventArgs> ConnectionBlocked
         {
             add
             {
@@ -207,7 +199,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<ShutdownEventArgs> ConnectionShutdown
+        public event AsyncEventHandler<ShutdownEventArgs> ConnectionShutdown
         {
             add
             {
@@ -234,7 +226,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<EventArgs> ConnectionUnblocked
+        public event AsyncEventHandler<EventArgs> ConnectionUnblocked
         {
             add
             {
@@ -252,7 +244,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryError
+        public event AsyncEventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryError
         {
             add
             {
@@ -414,7 +406,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
             else
             {
-                OnShutdown();
+                await OnShutdown();
                 m_session0.SetSessionClosing(false);
 
                 try
@@ -548,7 +540,7 @@ namespace RabbitMQ.Client.Framing.Impl
         }
 
         // Only call at the end of the Mainloop or HeartbeatLoop
-        public void FinishClose()
+        public async Task FinishClose()
         {
             // Notify hearbeat loops that they can leave
             m_heartbeatRead.Set();
@@ -557,7 +549,7 @@ namespace RabbitMQ.Client.Framing.Impl
 
             m_frameHandler.Close();
             m_model0.SetCloseReason(m_closeReason);
-            m_model0.FinishClose();
+            await m_model0.FinishClose();
         }
 
 #if NETFX_CORE
@@ -581,7 +573,7 @@ namespace RabbitMQ.Client.Framing.Impl
         }
 #endif
 
-        public void HandleMainLoopException(ShutdownEventArgs reason)
+        public async Task HandleMainLoopException(ShutdownEventArgs reason)
         {
             if (!SetCloseReason(reason))
             {
@@ -590,19 +582,19 @@ namespace RabbitMQ.Client.Framing.Impl
                 return;
             }
 
-            OnShutdown();
+            await OnShutdown();
             LogCloseError("Unexpected connection closure: " + reason, new Exception(reason.ToString()));
         }
 
-        public bool HardProtocolExceptionHandler(HardProtocolException hpe)
+        public async Task<bool> HardProtocolExceptionHandler(HardProtocolException hpe)
         {
             if (SetCloseReason(hpe.ShutdownReason))
             {
-                OnShutdown();
+                await OnShutdown();
                 m_session0.SetSessionClosing(false);
                 try
                 {
-                    m_session0.Transmit(ConnectionCloseWrapper(
+                    await m_session0.Transmit(ConnectionCloseWrapper(
                         hpe.ShutdownReason.ReplyCode,
                         hpe.ShutdownReason.ReplyText));
                     return true;
@@ -621,7 +613,7 @@ namespace RabbitMQ.Client.Framing.Impl
             return false;
         }
 
-        public void InternalClose(ShutdownEventArgs reason)
+        public async Task InternalClose(ShutdownEventArgs reason)
         {
             if (!SetCloseReason(reason))
             {
@@ -632,7 +624,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 // We are quiescing, but still allow for server-close
             }
 
-            OnShutdown();
+            await OnShutdown();
             m_session0.SetSessionClosing(true);
             TerminateMainloop();
         }
@@ -666,7 +658,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 catch (EndOfStreamException eose)
                 {
                     // Possible heartbeat exception
-                    HandleMainLoopException(new ShutdownEventArgs(
+                    await HandleMainLoopException(new ShutdownEventArgs(
                         ShutdownInitiator.Library,
                         0,
                         "End of stream",
@@ -674,12 +666,12 @@ namespace RabbitMQ.Client.Framing.Impl
                 }
                 catch (HardProtocolException hpe)
                 {
-                    shutdownCleanly = HardProtocolExceptionHandler(hpe);
+                    shutdownCleanly = await HardProtocolExceptionHandler(hpe);
                 }
 #if !NETFX_CORE
                 catch (Exception ex)
                 {
-                    HandleMainLoopException(new ShutdownEventArgs(ShutdownInitiator.Library,
+                    await HandleMainLoopException(new ShutdownEventArgs(ShutdownInitiator.Library,
                         Constants.InternalError,
                         "Unexpected Exception",
                         ex));
@@ -720,7 +712,7 @@ namespace RabbitMQ.Client.Framing.Impl
 #pragma warning restore 0168
                 }
 
-                FinishClose();
+                await FinishClose();
             }
             finally
             {
@@ -753,7 +745,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 // quiescing situation, even though technically we
                 // should be ignoring everything except
                 // connection.close-ok.
-                m_session0.HandleFrame(frame);
+                await m_session0.HandleFrame(frame);
             }
             else
             {
@@ -775,7 +767,7 @@ namespace RabbitMQ.Client.Framing.Impl
                     }
                     else
                     {
-                        session.HandleFrame(frame);
+                        await session.HandleFrame(frame);
                     }
                 }
             }
@@ -795,20 +787,20 @@ namespace RabbitMQ.Client.Framing.Impl
             m_closed = true;
         }
 
-        public void OnCallbackException(CallbackExceptionEventArgs args)
+        public async Task OnCallbackException(CallbackExceptionEventArgs args)
         {
-            EventHandler<CallbackExceptionEventArgs> handler;
+            AsyncEventHandler<CallbackExceptionEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_callbackException;
             }
             if (handler != null)
             {
-                foreach (EventHandler<CallbackExceptionEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<CallbackExceptionEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch
                     {
@@ -821,24 +813,24 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public void OnConnectionBlocked(ConnectionBlockedEventArgs args)
+        public async Task OnConnectionBlocked(ConnectionBlockedEventArgs args)
         {
-            EventHandler<ConnectionBlockedEventArgs> handler;
+            AsyncEventHandler<ConnectionBlockedEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_connectionBlocked;
             }
             if (handler != null)
             {
-                foreach (EventHandler<ConnectionBlockedEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<ConnectionBlockedEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, args);
+                        await h(this, args);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e,
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e,
                             new Dictionary<string, object>
                             {
                                 {"context", "OnConnectionBlocked"}
@@ -848,24 +840,24 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public void OnConnectionUnblocked()
+        public async Task OnConnectionUnblocked()
         {
-            EventHandler<EventArgs> handler;
+            AsyncEventHandler<EventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_connectionUnblocked;
             }
             if (handler != null)
             {
-                foreach (EventHandler<EventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<EventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, EventArgs.Empty);
+                        await h(this, EventArgs.Empty);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e,
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e,
                             new Dictionary<string, object>
                             {
                                 {"context", "OnConnectionUnblocked"}
@@ -876,9 +868,9 @@ namespace RabbitMQ.Client.Framing.Impl
         }
 
         ///<summary>Broadcasts notification of the final shutdown of the connection.</summary>
-        public void OnShutdown()
+        public async Task OnShutdown()
         {
-            EventHandler<ShutdownEventArgs> handler;
+            AsyncEventHandler<ShutdownEventArgs> handler;
             ShutdownEventArgs reason;
             lock (m_eventLock)
             {
@@ -888,15 +880,15 @@ namespace RabbitMQ.Client.Framing.Impl
             }
             if (handler != null)
             {
-                foreach (EventHandler<ShutdownEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<ShutdownEventArgs> h in handler.GetInvocationList())
                 {
                     try
                     {
-                        h(this, reason);
+                        await h(this, reason);
                     }
                     catch (Exception e)
                     {
-                        OnCallbackException(CallbackExceptionEventArgs.Build(e,
+                        await OnCallbackException(CallbackExceptionEventArgs.Build(e,
                             new Dictionary<string, object>
                             {
                                 {"context", "OnShutdown"}
@@ -992,7 +984,7 @@ entry.ToString());
             // flow of the *lower* layers is set up properly for
             // shutdown. Signal channel closure *up* the stack, toward
             // the model and application.
-            oldSession.Close(pe.ShutdownReason);
+            await oldSession.Close(pe.ShutdownReason);
 
             // The upper layers have been signalled. Now we can tell
             // our peer. The peer will respond through the lower
@@ -1059,7 +1051,7 @@ entry.ToString());
                         var eose = new EndOfStreamException(description);
                         ESLog.Error(description, eose);
                         m_shutdownReport.Add(new ShutdownReportEntry(description, eose));
-                        HandleMainLoopException(
+                        await HandleMainLoopException(
                             new ShutdownEventArgs(ShutdownInitiator.Library, 0, "End of stream", eose));
                         shouldTerminate = true;
                     }
@@ -1068,7 +1060,7 @@ entry.ToString());
                 if (shouldTerminate)
                 {
                     TerminateMainloop();
-                    FinishClose();
+                    await FinishClose();
                 }
                 else if (_heartbeatReadTimer != null)
                 {
@@ -1101,7 +1093,7 @@ entry.ToString());
                 }
                 catch (Exception e)
                 {
-                    HandleMainLoopException(new ShutdownEventArgs(
+                    await HandleMainLoopException(new ShutdownEventArgs(
                         ShutdownInitiator.Library,
                         0,
                         "End of stream",
@@ -1112,7 +1104,7 @@ entry.ToString());
                 if (m_closed || shouldTerminate)
                 {
                     TerminateMainloop();
-                    FinishClose();
+                    await FinishClose();
                 }
             }
             catch (ObjectDisposedException)
@@ -1233,15 +1225,15 @@ entry.ToString());
             return model;
         }
 
-        public void HandleConnectionBlocked(string reason)
+        public async Task HandleConnectionBlocked(string reason)
         {
             var args = new ConnectionBlockedEventArgs(reason);
-            OnConnectionBlocked(args);
+            await OnConnectionBlocked(args);
         }
 
-        public void HandleConnectionUnblocked()
+        public async Task HandleConnectionUnblocked()
         {
-            OnConnectionUnblocked();
+            await OnConnectionUnblocked();
         }
 
         public async Task Dispose()
@@ -1290,7 +1282,7 @@ entry.ToString());
             if (!serverVersion.Equals(Protocol.Version))
             {
                 TerminateMainloop();
-                FinishClose();
+                await FinishClose();
                 throw new ProtocolVersionMismatchException(Protocol.MajorVersion,
                     Protocol.MinorVersion,
                     serverVersion.Major,

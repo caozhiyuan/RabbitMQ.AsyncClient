@@ -70,7 +70,7 @@ namespace RabbitMQ.Client.Impl
 
         ///<summary>Handle incoming Basic.Ack methods. Signals a
         ///BasicAckEvent.</summary>
-        void HandleBasicAck(ulong deliveryTag,
+        Task HandleBasicAck(ulong deliveryTag,
             bool multiple);
 
         void HandleBasicCancel(string consumerTag, bool nowait);
@@ -112,18 +112,18 @@ namespace RabbitMQ.Client.Impl
 
         ///<summary>Handle incoming Basic.Nack methods. Signals a
         ///BasicNackEvent.</summary>
-        void HandleBasicNack(ulong deliveryTag,
+        Task HandleBasicNack(ulong deliveryTag,
             bool multiple,
             bool requeue);
 
         ///<summary>Handle incoming Basic.RecoverOk methods
         ///received in reply to Basic.Recover.
         ///</summary>
-        void HandleBasicRecoverOk();
+        Task HandleBasicRecoverOk();
 
         ///<summary>Handle incoming Basic.Return methods. Signals a
         ///BasicReturnEvent.</summary>
-        void HandleBasicReturn(ushort replyCode,
+        Task HandleBasicReturn(ushort replyCode,
             string replyText,
             string exchange,
             string routingKey,
@@ -132,25 +132,25 @@ namespace RabbitMQ.Client.Impl
 
         ///<summary>Handle an incoming Channel.Close. Shuts down the
         ///session and model.</summary>
-        void HandleChannelClose(ushort replyCode,
+        Task HandleChannelClose(ushort replyCode,
             string replyText,
             ushort classId,
             ushort methodId);
 
         ///<summary>Handle an incoming Channel.CloseOk.</summary>
-        void HandleChannelCloseOk();
+        Task HandleChannelCloseOk();
 
         ///<summary>Handle incoming Channel.Flow methods. Either
         ///stops or resumes sending the methods that have content.</summary>
-        void HandleChannelFlow(bool active);
+        Task HandleChannelFlow(bool active);
 
         ///<summary>Handle an incoming Connection.Blocked.</summary>
         [AmqpMethodMapping(null, "connection", "blocked")]
-        void HandleConnectionBlocked(string reason);
+        Task HandleConnectionBlocked(string reason);
 
         ///<summary>Handle an incoming Connection.Close. Shuts down the
         ///connection and all sessions and models.</summary>
-        void HandleConnectionClose(ushort replyCode,
+        Task HandleConnectionClose(ushort replyCode,
             string replyText,
             ushort classId,
             ushort methodId);
@@ -181,7 +181,7 @@ namespace RabbitMQ.Client.Impl
             ushort heartbeat);
 
         ///<summary>Handle an incominga Connection.Unblocked.</summary>
-        void HandleConnectionUnblocked();
+        Task HandleConnectionUnblocked();
 
         ///<summary>Handle incoming Queue.DeclareOk methods. Routes the
         ///information to a waiting Queue.DeclareOk continuation.</summary>

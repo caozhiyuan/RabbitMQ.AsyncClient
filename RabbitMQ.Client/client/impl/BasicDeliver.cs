@@ -33,7 +33,7 @@ namespace RabbitMQ.Client.Impl
             this.body = body;
         }
 
-        protected override async Task Execute(ModelBase model, IAsyncBasicConsumer consumer)
+        protected override async Task Execute(ModelBase model, IBasicConsumer consumer)
         {
             try
             {
@@ -52,7 +52,7 @@ namespace RabbitMQ.Client.Impl
                     {"consumer", consumer},
                     {"context",  "HandleBasicDeliver"}
                 };
-                model.OnCallbackException(CallbackExceptionEventArgs.Build(e, details));
+                await model.OnCallbackException(CallbackExceptionEventArgs.Build(e, details));
             }
         }
     }

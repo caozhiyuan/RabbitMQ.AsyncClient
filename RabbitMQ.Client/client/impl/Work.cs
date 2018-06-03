@@ -5,11 +5,11 @@ namespace RabbitMQ.Client.Impl
 {
     internal abstract class Work
     {
-        readonly IAsyncBasicConsumer asyncConsumer;
+        readonly IBasicConsumer asyncConsumer;
 
         protected Work(IBasicConsumer consumer)
         {
-            asyncConsumer = (IAsyncBasicConsumer)consumer;
+            asyncConsumer = (IBasicConsumer)consumer;
         }
 
         public async Task Execute(ModelBase model)
@@ -24,6 +24,6 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        protected abstract Task Execute(ModelBase model, IAsyncBasicConsumer consumer);
+        protected abstract Task Execute(ModelBase model, IBasicConsumer consumer);
     }
 }

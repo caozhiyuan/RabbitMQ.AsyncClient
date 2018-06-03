@@ -6271,7 +6271,7 @@ namespace RabbitMQ.Client.Framing.Impl
             if (__rep == null) throw new UnexpectedMethodException(__repBase);
         }
 
-        public override bool DispatchAsynchronous(RabbitMQ.Client.Impl.Command cmd)
+        public override async Task<bool> DispatchAsynchronous(RabbitMQ.Client.Impl.Command cmd)
         {
             RabbitMQ.Client.Impl.MethodBase __method = (RabbitMQ.Client.Impl.MethodBase) cmd.Method;
             switch ((__method.ProtocolClassId << 16) | __method.ProtocolMethodId)
@@ -6279,7 +6279,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 case 3932240:
                 {
                     BasicAck __impl = (BasicAck) __method;
-                    HandleBasicAck(
+                    await HandleBasicAck(
                         __impl.m_deliveryTag,
                         __impl.m_multiple);
                     return true;
@@ -6340,7 +6340,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 case 3932280:
                 {
                     BasicNack __impl = (BasicNack) __method;
-                    HandleBasicNack(
+                    await HandleBasicNack(
                         __impl.m_deliveryTag,
                         __impl.m_multiple,
                         __impl.m_requeue);
@@ -6348,13 +6348,13 @@ namespace RabbitMQ.Client.Framing.Impl
                 }
                 case 3932271:
                 {
-                    HandleBasicRecoverOk();
+                    await HandleBasicRecoverOk();
                     return true;
                 }
                 case 3932210:
                 {
                     BasicReturn __impl = (BasicReturn) __method;
-                    HandleBasicReturn(
+                    await HandleBasicReturn(
                         __impl.m_replyCode,
                         __impl.m_replyText,
                         __impl.m_exchange,
@@ -6366,7 +6366,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 case 1310760:
                 {
                     ChannelClose __impl = (ChannelClose) __method;
-                    HandleChannelClose(
+                    await HandleChannelClose(
                         __impl.m_replyCode,
                         __impl.m_replyText,
                         __impl.m_classId,
@@ -6375,27 +6375,27 @@ namespace RabbitMQ.Client.Framing.Impl
                 }
                 case 1310761:
                 {
-                    HandleChannelCloseOk();
+                    await HandleChannelCloseOk();
                     return true;
                 }
                 case 1310740:
                 {
                     ChannelFlow __impl = (ChannelFlow) __method;
-                    HandleChannelFlow(
+                    await HandleChannelFlow(
                         __impl.m_active);
                     return true;
                 }
                 case 655420:
                 {
                     ConnectionBlocked __impl = (ConnectionBlocked) __method;
-                    HandleConnectionBlocked(
+                    await HandleConnectionBlocked(
                         __impl.m_reason);
                     return true;
                 }
                 case 655410:
                 {
                     ConnectionClose __impl = (ConnectionClose) __method;
-                    HandleConnectionClose(
+                    await HandleConnectionClose(
                         __impl.m_replyCode,
                         __impl.m_replyText,
                         __impl.m_classId,
@@ -6438,7 +6438,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 }
                 case 655421:
                 {
-                    HandleConnectionUnblocked();
+                    await HandleConnectionUnblocked();
                     return true;
                 }
                 case 3276811:

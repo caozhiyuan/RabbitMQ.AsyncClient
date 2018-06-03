@@ -80,8 +80,8 @@ namespace RabbitMQ.Client.Framing.Impl
         protected ConcurrentDictionary<RecordedBinding, byte> m_recordedBindings =
             new ConcurrentDictionary<RecordedBinding, byte>();
 
-        protected List<EventHandler<ConnectionBlockedEventArgs>> m_recordedBlockedEventHandlers =
-            new List<EventHandler<ConnectionBlockedEventArgs>>();
+        protected List<AsyncEventHandler<ConnectionBlockedEventArgs>> m_recordedBlockedEventHandlers =
+            new List<AsyncEventHandler<ConnectionBlockedEventArgs>>();
 
         protected IDictionary<string, RecordedConsumer> m_recordedConsumers =
             new ConcurrentDictionary<string, RecordedConsumer>();
@@ -92,17 +92,17 @@ namespace RabbitMQ.Client.Framing.Impl
         protected IDictionary<string, RecordedQueue> m_recordedQueues =
             new ConcurrentDictionary<string, RecordedQueue>();
 
-        protected List<EventHandler<ShutdownEventArgs>> m_recordedShutdownEventHandlers =
-            new List<EventHandler<ShutdownEventArgs>>();
+        protected List<AsyncEventHandler<ShutdownEventArgs>> m_recordedShutdownEventHandlers =
+            new List<AsyncEventHandler<ShutdownEventArgs>>();
 
-        protected List<EventHandler<EventArgs>> m_recordedUnblockedEventHandlers =
-            new List<EventHandler<EventArgs>>();
+        protected List<AsyncEventHandler<EventArgs>> m_recordedUnblockedEventHandlers =
+            new List<AsyncEventHandler<EventArgs>>();
 
-        private EventHandler<ConsumerTagChangedAfterRecoveryEventArgs> m_consumerTagChange;
-        private EventHandler<QueueNameChangedAfterRecoveryEventArgs> m_queueNameChange;
-        private EventHandler<EventArgs> m_recovery;
+        private AsyncEventHandler<ConsumerTagChangedAfterRecoveryEventArgs> m_consumerTagChange;
+        private AsyncEventHandler<QueueNameChangedAfterRecoveryEventArgs> m_queueNameChange;
+        private AsyncEventHandler<EventArgs> m_recovery;
 
-        private EventHandler<ConnectionRecoveryErrorEventArgs> m_connectionRecoveryError;
+        private AsyncEventHandler<ConnectionRecoveryErrorEventArgs> m_connectionRecoveryError;
 
         public AutorecoveringConnection(ConnectionFactory factory, string clientProvidedName = null)
         {
@@ -127,7 +127,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 }
         }
 
-        public event EventHandler<EventArgs> RecoverySucceeded
+        public event AsyncEventHandler<EventArgs> RecoverySucceeded
         {
             add
             {
@@ -145,7 +145,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryError
+        public event AsyncEventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryError
         {
             add
             {
@@ -163,7 +163,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<CallbackExceptionEventArgs> CallbackException
+        public event AsyncEventHandler<CallbackExceptionEventArgs> CallbackException
         {
             add
             {
@@ -181,7 +181,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<ConnectionBlockedEventArgs> ConnectionBlocked
+        public event AsyncEventHandler<ConnectionBlockedEventArgs> ConnectionBlocked
         {
             add
             {
@@ -201,7 +201,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<ShutdownEventArgs> ConnectionShutdown
+        public event AsyncEventHandler<ShutdownEventArgs> ConnectionShutdown
         {
             add
             {
@@ -221,7 +221,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<EventArgs> ConnectionUnblocked
+        public event AsyncEventHandler<EventArgs> ConnectionUnblocked
         {
             add
             {
@@ -241,7 +241,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<ConsumerTagChangedAfterRecoveryEventArgs> ConsumerTagChangeAfterRecovery
+        public event AsyncEventHandler<ConsumerTagChangedAfterRecoveryEventArgs> ConsumerTagChangeAfterRecovery
         {
             add
             {
@@ -259,7 +259,7 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        public event EventHandler<QueueNameChangedAfterRecoveryEventArgs> QueueNameChangeAfterRecovery
+        public event AsyncEventHandler<QueueNameChangedAfterRecoveryEventArgs> QueueNameChangeAfterRecovery
         {
             add
             {
@@ -278,7 +278,7 @@ namespace RabbitMQ.Client.Framing.Impl
         }
 
         [Obsolete("Use RecoverySucceeded instead")]
-        public event EventHandler<EventArgs> Recovery
+        public event AsyncEventHandler<EventArgs> Recovery
         {
             add
             {
@@ -444,7 +444,7 @@ namespace RabbitMQ.Client.Framing.Impl
                     }
 
                     ESLog.Info("Connection recovery completed");
-                    RunRecoveryEventHandlers();
+                    await RunRecoveryEventHandlers();
                 }
                 else
                 {
@@ -641,7 +641,7 @@ namespace RabbitMQ.Client.Framing.Impl
                 fh, this.ClientProvidedName);
 
             AutorecoveringConnection self = this;
-            EventHandler<ShutdownEventArgs> recoveryListener = (_, args) =>
+            AsyncEventHandler<ShutdownEventArgs> recoveryListener = (_, args) =>
             {
                 if (ShouldTriggerConnectionRecovery(args))
                 {
@@ -654,6 +654,7 @@ namespace RabbitMQ.Client.Framing.Impl
                         ESLog.Error("BeginAutomaticRecovery() failed.", e);
                     }
                 }
+                return Task.CompletedTask;
             };
             lock (m_eventLock)
             {
@@ -748,14 +749,14 @@ namespace RabbitMQ.Client.Framing.Impl
             return m;
         }
 
-        public void HandleConnectionBlocked(string reason)
+        public Task HandleConnectionBlocked(string reason)
         {
-            m_delegate.HandleConnectionBlocked(reason);
+            return m_delegate.HandleConnectionBlocked(reason);
         }
 
-        public void HandleConnectionUnblocked()
+        public Task HandleConnectionUnblocked()
         {
-            m_delegate.HandleConnectionUnblocked();
+            return m_delegate.HandleConnectionUnblocked();
         }
 
         public async Task Dispose()
@@ -828,10 +829,10 @@ namespace RabbitMQ.Client.Framing.Impl
 
         protected void RecoverConnectionBlockedHandlers()
         {
-            List<EventHandler<ConnectionBlockedEventArgs>> handler = m_recordedBlockedEventHandlers;
+            List<AsyncEventHandler<ConnectionBlockedEventArgs>> handler = m_recordedBlockedEventHandlers;
             if (handler != null)
             {
-                foreach (EventHandler<ConnectionBlockedEventArgs> eh in handler)
+                foreach (AsyncEventHandler<ConnectionBlockedEventArgs> eh in handler)
                 {
                     m_delegate.ConnectionBlocked += eh;
                 }
@@ -857,17 +858,17 @@ namespace RabbitMQ.Client.Framing.Impl
                     if (handler != null)
                     {
                         var args = new ConnectionRecoveryErrorEventArgs(e);
-                        foreach (EventHandler<ConnectionRecoveryErrorEventArgs> h in handler.GetInvocationList())
+                        foreach (AsyncEventHandler<ConnectionRecoveryErrorEventArgs> h in handler.GetInvocationList())
                         {
                             try
                             {
-                                h(this, args);
+                                await h(this, args);
                             }
                             catch (Exception ex)
                             {
                                 var a = new CallbackExceptionEventArgs(ex);
                                 a.Detail["context"] = "OnConnectionRecoveryError";
-                                m_delegate.OnCallbackException(a);
+                                await m_delegate.OnCallbackException(a);
                             }
                         }
                     }
@@ -881,7 +882,7 @@ namespace RabbitMQ.Client.Framing.Impl
 
         protected void RecoverConnectionShutdownHandlers()
         {
-            foreach (EventHandler<ShutdownEventArgs> eh in m_recordedShutdownEventHandlers)
+            foreach (AsyncEventHandler<ShutdownEventArgs> eh in m_recordedShutdownEventHandlers)
             {
                 m_delegate.ConnectionShutdown += eh;
             }
@@ -889,10 +890,10 @@ namespace RabbitMQ.Client.Framing.Impl
 
         protected void RecoverConnectionUnblockedHandlers()
         {
-            List<EventHandler<EventArgs>> handler = m_recordedUnblockedEventHandlers;
+            List<AsyncEventHandler<EventArgs>> handler = m_recordedUnblockedEventHandlers;
             if (handler != null)
             {
-                foreach (EventHandler<EventArgs> eh in handler)
+                foreach (AsyncEventHandler<EventArgs> eh in handler)
                 {
                     m_delegate.ConnectionUnblocked += eh;
                 }
@@ -918,18 +919,18 @@ namespace RabbitMQ.Client.Framing.Impl
 
                     if (m_consumerTagChange != null)
                     {
-                        foreach (EventHandler<ConsumerTagChangedAfterRecoveryEventArgs> h in m_consumerTagChange.GetInvocationList())
+                        foreach (AsyncEventHandler<ConsumerTagChangedAfterRecoveryEventArgs> h in m_consumerTagChange.GetInvocationList())
                         {
                             try
                             {
                                 var eventArgs = new ConsumerTagChangedAfterRecoveryEventArgs(tag, newTag);
-                                h(this, eventArgs);
+                                await h(this, eventArgs);
                             }
                             catch (Exception e)
                             {
                                 var args = new CallbackExceptionEventArgs(e);
                                 args.Detail["context"] = "OnConsumerRecovery";
-                                m_delegate.OnCallbackException(args);
+                                await m_delegate.OnCallbackException(args);
                             }
                         }
                     }
@@ -1017,18 +1018,18 @@ namespace RabbitMQ.Client.Framing.Impl
 
                     if (m_queueNameChange != null)
                     {
-                        foreach (EventHandler<QueueNameChangedAfterRecoveryEventArgs> h in m_queueNameChange.GetInvocationList())
+                        foreach (AsyncEventHandler<QueueNameChangedAfterRecoveryEventArgs> h in m_queueNameChange.GetInvocationList())
                         {
                             try
                             {
                                 var eventArgs = new QueueNameChangedAfterRecoveryEventArgs(oldName, newName);
-                                h(this, eventArgs);
+                                await h(this, eventArgs);
                             }
                             catch (Exception e)
                             {
                                 var args = new CallbackExceptionEventArgs(e);
                                 args.Detail["context"] = "OnQueueRecovery";
-                                m_delegate.OnCallbackException(args);
+                                await m_delegate.OnCallbackException(args);
                             }
                         }
                     }
@@ -1042,22 +1043,22 @@ namespace RabbitMQ.Client.Framing.Impl
             }
         }
 
-        protected void RunRecoveryEventHandlers()
+        protected async Task RunRecoveryEventHandlers()
         {
-            EventHandler<EventArgs> handler = m_recovery;
+            AsyncEventHandler<EventArgs> handler = m_recovery;
             if (handler != null)
             {
-                foreach (EventHandler<EventArgs> reh in handler.GetInvocationList())
+                foreach (AsyncEventHandler<EventArgs> reh in handler.GetInvocationList())
                 {
                     try
                     {
-                        reh(this, EventArgs.Empty);
+                        await reh(this, EventArgs.Empty);
                     }
                     catch (Exception e)
                     {
                         var args = new CallbackExceptionEventArgs(e);
                         args.Detail["context"] = "OnConnectionRecovery";
-                        m_delegate.OnCallbackException(args);
+                        await m_delegate.OnCallbackException(args);
                     }
                 }
             }

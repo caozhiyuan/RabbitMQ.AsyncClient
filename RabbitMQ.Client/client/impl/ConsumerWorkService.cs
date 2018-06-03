@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Threading.Tasks;
+using RabbitMQ.Client.Impl;
 
 namespace RabbitMQ.Client
 {
@@ -8,7 +10,8 @@ namespace RabbitMQ.Client
     {
         readonly ConcurrentDictionary<IModel, WorkPool> workPools = new ConcurrentDictionary<IModel, WorkPool>();
 
-        public void AddWork(IModel model, Action fn)
+        internal void Schedule<TWork>(ModelBase model, TWork work)
+            where TWork : Work
         {
             // two step approach is taken, as TryGetValue does not aquire locks
             // if this fails, GetOrAdd is called, which takes a lock
@@ -26,86 +29,75 @@ namespace RabbitMQ.Client
                 }
             }
 
-            workPool.Enqueue(fn);
+            workPool.Enqueue(work);
         }
 
-        public void StopWork(IModel model)
+        public async Task Stop(IModel model)
         {
             WorkPool workPool;
             if (workPools.TryRemove(model, out workPool))
             {
-                workPool.Stop();
+                await workPool.Stop().ConfigureAwait(false);
             }
         }
 
-        public void StopWork()
+        public async Task Stop()
         {
             foreach (var model in workPools.Keys)
             {
-                StopWork(model);
+                await Stop(model).ConfigureAwait(false);
             }
         }
 
         class WorkPool
         {
-            readonly ConcurrentQueue<Action> actions;
-            readonly AutoResetEvent messageArrived;
+            readonly ConcurrentQueue<Work> workQueue;
             readonly TimeSpan waitTime;
             readonly CancellationTokenSource tokenSource;
-            readonly string name;
+            readonly ModelBase model;
+            TaskCompletionSource<bool> messageArrived;
+            private Task task;
 
-            public WorkPool(IModel model)
+            public WorkPool(ModelBase model)
             {
-                name = model.ToString();
-                actions = new ConcurrentQueue<Action>();
-                messageArrived = new AutoResetEvent(false);
+                this.model = model;
+                workQueue = new ConcurrentQueue<Work>();
+                messageArrived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 waitTime = TimeSpan.FromMilliseconds(100);
                 tokenSource = new CancellationTokenSource();
             }
 
             public void Start()
             {
-#if NETFX_CORE
-                System.Threading.Tasks.Task.Factory.StartNew(Loop, System.Threading.Tasks.TaskCreationOptions.LongRunning);
-#else
-                var thread = new Thread(Loop)
-                {
-                    Name = "WorkPool-" + name,
-                    IsBackground = true
-                };
-                thread.Start();
-#endif
+                task = Task.Run(Loop, CancellationToken.None);
             }
 
-            public void Enqueue(Action action)
+            public void Enqueue(Work work)
             {
-                actions.Enqueue(action);
-                messageArrived.Set();
+                workQueue.Enqueue(work);
+                messageArrived.TrySetResult(true);
             }
 
-            void Loop()
+            async Task Loop()
             {
                 while (tokenSource.IsCancellationRequested == false)
                 {
-                    Action action;
-                    while (actions.TryDequeue(out action))
+                    Work work;
+                    while (workQueue.TryDequeue(out work))
                     {
-                        try
-                        {
-                            action();
-                        }
-                        catch (Exception)
-                        {
-                        }
+                        await work.Execute(model).ConfigureAwait(false);
                     }
 
-                    messageArrived.WaitOne(waitTime);
+                    await Task.WhenAny(Task.Delay(waitTime, tokenSource.Token), messageArrived.Task).ConfigureAwait(false);
+                    messageArrived.TrySetResult(true);
+                    messageArrived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
 
-            public void Stop()
+            public Task Stop()
             {
                 tokenSource.Cancel();
+                return task;
             }
         }
     }

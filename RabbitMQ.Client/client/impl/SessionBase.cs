@@ -43,13 +43,14 @@ using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Framing.Impl;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using RabbitMQ.Client.Events;
 
 namespace RabbitMQ.Client.Impl
 {
     public abstract class SessionBase : ISession
     {
         private readonly object _shutdownLock = new object();
-        private EventHandler<ShutdownEventArgs> _sessionShutdown;
+        private AsyncEventHandler<ShutdownEventArgs> _sessionShutdown;
 
         public SessionBase(Connection connection, int channelNumber)
         {
@@ -62,7 +63,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public event EventHandler<ShutdownEventArgs> SessionShutdown
+        public event AsyncEventHandler<ShutdownEventArgs> SessionShutdown
         {
             add
             {
@@ -94,7 +95,7 @@ namespace RabbitMQ.Client.Impl
 
         public int ChannelNumber { get; private set; }
         public ShutdownEventArgs CloseReason { get; set; }
-        public Action<ISession, Command> CommandReceived { get; set; }
+        public Func<ISession, Command, Task> CommandReceived { get; set; }
         public Connection Connection { get; private set; }
 
         public bool IsOpen
@@ -107,23 +108,23 @@ namespace RabbitMQ.Client.Impl
             get { return Connection; }
         }
 
-        public virtual void OnCommandReceived(Command cmd)
+        public virtual async Task OnCommandReceived(Command cmd)
         {
             if (CommandReceived != null)
             {
-                CommandReceived(this, cmd);
+                await CommandReceived(this, cmd);
             }
         }
 
-        public virtual void OnConnectionShutdown(object conn, ShutdownEventArgs reason)
+        public virtual Task OnConnectionShutdown(object conn, ShutdownEventArgs reason)
         {
-            Close(reason);
+            return Close(reason);
         }
 
-        public virtual void OnSessionShutdown(ShutdownEventArgs reason)
+        public virtual async Task OnSessionShutdown(ShutdownEventArgs reason)
         {
             Connection.ConnectionShutdown -= OnConnectionShutdown;
-            EventHandler<ShutdownEventArgs> handler;
+            AsyncEventHandler<ShutdownEventArgs> handler;
             lock (_shutdownLock)
             {
                 handler = _sessionShutdown;
@@ -131,7 +132,7 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                handler(this, reason);
+                await handler(this, reason);
             }
         }
 
@@ -140,12 +141,12 @@ namespace RabbitMQ.Client.Impl
             return GetType().Name + "#" + ChannelNumber + ":" + Connection;
         }
 
-        public void Close(ShutdownEventArgs reason)
+        public Task Close(ShutdownEventArgs reason)
         {
-            Close(reason, true);
+            return Close(reason, true);
         }
 
-        public void Close(ShutdownEventArgs reason, bool notify)
+        public async Task Close(ShutdownEventArgs reason, bool notify)
         {
             if (CloseReason == null)
             {
@@ -159,13 +160,13 @@ namespace RabbitMQ.Client.Impl
             }
             if (notify)
             {
-                OnSessionShutdown(CloseReason);
+                await OnSessionShutdown(CloseReason);
             }
         }
 
-        public abstract void HandleFrame(InboundFrame frame);
+        public abstract Task HandleFrame(InboundFrame frame);
 
-        public void Notify()
+        public async Task Notify()
         {
             // Ensure that we notify only when session is already closed
             // If not, throw exception, since this is a serious bug in the library
@@ -179,7 +180,7 @@ namespace RabbitMQ.Client.Impl
                     }
                 }
             }
-            OnSessionShutdown(CloseReason);
+            await OnSessionShutdown(CloseReason);
         }
 
         public virtual Task Transmit(Command cmd)

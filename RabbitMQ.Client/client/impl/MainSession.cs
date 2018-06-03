@@ -47,6 +47,7 @@ using System;
 using System.Threading.Tasks;
 using RabbitMQ.Client.Framing;
 using RabbitMQ.Client.Framing.Impl;
+using RabbitMQ.Util;
 
 namespace RabbitMQ.Client.Impl
 {
@@ -73,14 +74,13 @@ namespace RabbitMQ.Client.Impl
 
         public Action Handler { get; set; }
 
-        public override void HandleFrame(InboundFrame frame)
+        public override Task HandleFrame(InboundFrame frame)
         {
             lock (_closingLock)
             {
                 if (!m_closing)
                 {
-                    base.HandleFrame(frame);
-                    return;
+                    return base.HandleFrame(frame);
                 }
             }
 
@@ -90,8 +90,7 @@ namespace RabbitMQ.Client.Impl
                 if ((method.ProtocolClassId == m_closeClassId)
                     && (method.ProtocolMethodId == m_closeMethodId))
                 {
-                    base.HandleFrame(frame);
-                    return;
+                    return base.HandleFrame(frame);
                 }
 
                 if ((method.ProtocolClassId == m_closeOkClassId)
@@ -102,6 +101,8 @@ namespace RabbitMQ.Client.Impl
                     Handler();
                 }
             }
+
+            return Task.CompletedTask;
 
             // Either a non-method frame, or not what we were looking
             // for. Ignore it - we're quiescing.

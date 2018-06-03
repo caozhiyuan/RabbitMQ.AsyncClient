@@ -39,6 +39,7 @@
 //---------------------------------------------------------------------------
 
 using System;
+using System.Threading.Tasks;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Util;
 
@@ -56,7 +57,7 @@ namespace RabbitMQ.Client
     public class DefaultBasicConsumer : IBasicConsumer
     {
         public readonly object m_eventLock = new object();
-        public EventHandler<ConsumerEventArgs> m_consumerCancelled;
+        public AsyncEventHandler<ConsumerEventArgs> m_consumerCancelled;
 
         /// <summary>
         /// Creates a new instance of an <see cref="DefaultBasicConsumer"/>.
@@ -101,7 +102,7 @@ namespace RabbitMQ.Client
         /// <summary>
         /// Signalled when the consumer gets cancelled.
         /// </summary>
-        public event EventHandler<ConsumerEventArgs> ConsumerCancelled
+        public event AsyncEventHandler<ConsumerEventArgs> ConsumerCancelled
         {
             add
             {
@@ -131,28 +132,29 @@ namespace RabbitMQ.Client
         ///  See <see cref="HandleBasicCancelOk"/> for notification of consumer cancellation due to basicCancel
         /// </summary>
         /// <param name="consumerTag">Consumer tag this consumer is registered.</param>
-        public virtual void HandleBasicCancel(string consumerTag)
+        public virtual Task HandleBasicCancel(string consumerTag)
         {
-            OnCancel();
+            return OnCancel();
         }
 
         /// <summary>
         /// Called upon successful deregistration of the consumer from the broker.
         /// </summary>
         /// <param name="consumerTag">Consumer tag this consumer is registered.</param>
-        public virtual void HandleBasicCancelOk(string consumerTag)
+        public virtual Task HandleBasicCancelOk(string consumerTag)
         {
-            OnCancel();
+            return OnCancel();
         }
 
         /// <summary>
         /// Called upon successful registration of the consumer with the broker.
         /// </summary>
         /// <param name="consumerTag">Consumer tag this consumer is registered.</param>
-        public virtual void HandleBasicConsumeOk(string consumerTag)
+        public virtual Task HandleBasicConsumeOk(string consumerTag)
         {
             ConsumerTag = consumerTag;
             IsRunning = true;
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -163,7 +165,7 @@ namespace RabbitMQ.Client
         /// Note that in particular, some delivered messages may require acknowledgement via <see cref="IModel.BasicAck"/>.
         /// The implementation of this method in this class does NOT acknowledge such messages.
         /// </remarks>
-        public virtual void HandleBasicDeliver(string consumerTag,
+        public virtual Task HandleBasicDeliver(string consumerTag,
             ulong deliveryTag,
             bool redelivered,
             string exchange,
@@ -172,6 +174,7 @@ namespace RabbitMQ.Client
             byte[] body)
         {
             // Nothing to do here.
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -179,10 +182,10 @@ namespace RabbitMQ.Client
         ///  </summary>
         ///  <param name="model"> Common AMQP model.</param>
         /// <param name="reason"> Information about the reason why a particular model, session, or connection was destroyed.</param>
-        public virtual void HandleModelShutdown(object model, ShutdownEventArgs reason)
+        public virtual async Task HandleModelShutdown(object model, ShutdownEventArgs reason)
         {
             ShutdownReason = reason;
-            OnCancel();
+            await OnCancel();
         }
 
         /// <summary>
@@ -191,19 +194,19 @@ namespace RabbitMQ.Client
         /// This default implementation simply sets the <see cref="IsRunning"/> 
         /// property to false, and takes no further action.
         /// </remarks>
-        public virtual void OnCancel()
+        public virtual async Task OnCancel()
         {
             IsRunning = false;
-            EventHandler<ConsumerEventArgs> handler;
+            AsyncEventHandler<ConsumerEventArgs> handler;
             lock (m_eventLock)
             {
                 handler = m_consumerCancelled;
             }
             if (handler != null)
             {
-                foreach (EventHandler<ConsumerEventArgs> h in handler.GetInvocationList())
+                foreach (AsyncEventHandler<ConsumerEventArgs> h in handler.GetInvocationList())
                 {
-                    h(this, new ConsumerEventArgs(ConsumerTag));
+                    await h(this, new ConsumerEventArgs(ConsumerTag));
                 }
             }
         }

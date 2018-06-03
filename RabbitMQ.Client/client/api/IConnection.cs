@@ -170,12 +170,12 @@ namespace RabbitMQ.Client
         /// <see cref="IConnection"/>, then this event will be signalled whenever one
         /// of those event handlers throws an exception, as well.
         /// </remarks>
-        event EventHandler<CallbackExceptionEventArgs> CallbackException;
-        event EventHandler<EventArgs> RecoverySucceeded;
-        event EventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryError;
+        event AsyncEventHandler<CallbackExceptionEventArgs> CallbackException;
+        event AsyncEventHandler<EventArgs> RecoverySucceeded;
+        event AsyncEventHandler<ConnectionRecoveryErrorEventArgs> ConnectionRecoveryError;
 
 
-        event EventHandler<ConnectionBlockedEventArgs> ConnectionBlocked;
+        event AsyncEventHandler<ConnectionBlockedEventArgs> ConnectionBlocked;
 
         /// <summary>
         /// Raised when the connection is destroyed.
@@ -185,9 +185,9 @@ namespace RabbitMQ.Client
         /// event handler is added to this event, the event handler
         /// will be fired immediately.
         /// </remarks>
-        event EventHandler<ShutdownEventArgs> ConnectionShutdown;
+        event AsyncEventHandler<ShutdownEventArgs> ConnectionShutdown;
 
-        event EventHandler<EventArgs> ConnectionUnblocked;
+        event AsyncEventHandler<EventArgs> ConnectionUnblocked;
 
         /// <summary>
         /// Abort this connection and all its channels.
@@ -315,12 +315,12 @@ namespace RabbitMQ.Client
         /// <summary>
         /// Handle incoming Connection.Blocked methods.
         /// </summary>
-        void HandleConnectionBlocked(string reason);
+        Task HandleConnectionBlocked(string reason);
 
         /// <summary>
         /// Handle incoming Connection.Unblocked methods.
         /// </summary>
-        void HandleConnectionUnblocked();
+        Task HandleConnectionUnblocked();
 
         ConsumerWorkService ConsumerWorkService { get; }
 

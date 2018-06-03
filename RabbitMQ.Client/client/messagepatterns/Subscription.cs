@@ -76,7 +76,7 @@ namespace RabbitMQ.Client.MessagePatterns
     public class Subscription : ISubscription
     {
         protected readonly object m_eventLock = new object();
-        protected volatile EventingBasicConsumer m_consumer;
+        protected volatile AsyncEventingBasicConsumer m_consumer;
         private BlockingCollection<BasicDeliverEventArgs> m_queue = 
             new BlockingCollection<BasicDeliverEventArgs>(new ConcurrentQueue<BasicDeliverEventArgs>());
 
@@ -96,8 +96,12 @@ namespace RabbitMQ.Client.MessagePatterns
             Model = model;
             QueueName = queueName;
             AutoAck = autoAck;
-            m_consumer = new EventingBasicConsumer(Model);
-            m_consumer.Received += (sender, args) => m_queue.Add(args);
+            m_consumer = new AsyncEventingBasicConsumer(Model);
+            m_consumer.Received += (sender, args) =>
+            {
+                m_queue.Add(args);
+                return Task.CompletedTask;
+            };
         }
 
         public async Task Subscribe(string consumerTag)
@@ -312,7 +316,7 @@ namespace RabbitMQ.Client.MessagePatterns
             // Alias the pointer as otherwise it may change out
             // from under us by the operation of Close() from
             // another thread.
-            EventingBasicConsumer consumer = m_consumer;
+            AsyncEventingBasicConsumer consumer = m_consumer;
             try
             {
                 if (consumer == null || Model.IsClosed)
@@ -449,13 +453,14 @@ namespace RabbitMQ.Client.MessagePatterns
             }
         }
 
-        private void HandleConsumerCancelled(object sender, ConsumerEventArgs e)
+        private Task HandleConsumerCancelled(object sender, ConsumerEventArgs e)
         {
             lock (m_eventLock)
             {
                 m_consumer = null;
                 MutateLatestEvent(null);
             }
+            return Task.CompletedTask;
         }
     }
 }

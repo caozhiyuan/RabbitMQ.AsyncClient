@@ -14,7 +14,7 @@ namespace RabbitMQ.Client.Impl
             this.consumerTag = consumerTag;
         }
 
-        protected override async Task Execute(ModelBase model, IAsyncBasicConsumer consumer)
+        protected override async Task Execute(ModelBase model, IBasicConsumer consumer)
         {
             try
             {
@@ -27,7 +27,7 @@ namespace RabbitMQ.Client.Impl
                     {"consumer", consumer},
                     {"context",  "HandleBasicConsumeOk"}
                 };
-                model.OnCallbackException(CallbackExceptionEventArgs.Build(e, details));
+                await model.OnCallbackException(CallbackExceptionEventArgs.Build(e, details));
             }
         }
     }

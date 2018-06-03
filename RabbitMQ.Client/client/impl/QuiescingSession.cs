@@ -39,6 +39,7 @@
 //---------------------------------------------------------------------------
 
 using System;
+using System.Threading.Tasks;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
@@ -60,7 +61,7 @@ namespace RabbitMQ.Client.Impl
             m_reason = reason;
         }
 
-        public override void HandleFrame(InboundFrame frame)
+        public override async Task HandleFrame(InboundFrame frame)
         {
             if (frame.IsMethod())
             {
@@ -71,14 +72,14 @@ namespace RabbitMQ.Client.Impl
                     // This is the reply we were looking for. Release
                     // the channel with the reason we were passed in
                     // our constructor.
-                    Close(m_reason);
+                    await Close(m_reason);
                 }
                 else if ((method.ProtocolClassId == ChannelClose.ClassId)
                          && (method.ProtocolMethodId == ChannelClose.MethodId))
                 {
                     // We're already shutting down the channel, so
                     // just send back an ok.
-                    Transmit(CreateChannelCloseOk());
+                    await Transmit(CreateChannelCloseOk());
                 }
             }
 

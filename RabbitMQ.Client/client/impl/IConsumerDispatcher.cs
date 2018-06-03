@@ -42,6 +42,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace RabbitMQ.Client.Impl
 {
@@ -72,8 +73,8 @@ namespace RabbitMQ.Client.Impl
 
         void Quiesce();
 
-        void Shutdown();
+        Task Shutdown();
 
-        void Shutdown(IModel model);
+        Task Shutdown(IModel model);
     }
 }

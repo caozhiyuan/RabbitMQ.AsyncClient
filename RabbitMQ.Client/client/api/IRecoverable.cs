@@ -39,6 +39,7 @@
 //---------------------------------------------------------------------------
 
 using System;
+using RabbitMQ.Client.Events;
 
 namespace RabbitMQ.Client
 {
@@ -47,6 +48,6 @@ namespace RabbitMQ.Client
     /// </summary>
     public interface IRecoverable
     {
-        event EventHandler<EventArgs> Recovery;
+        event AsyncEventHandler<EventArgs> Recovery;
     }
 }
