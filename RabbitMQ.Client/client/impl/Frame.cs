@@ -237,6 +237,10 @@ namespace RabbitMQ.Client.Impl
             while (index < size)
             {
                 int read = await reader.ReadAsync(byteBuffer, index, size - index);
+                if (read == 0)
+                {
+                    throw new SocketException((int)SocketError.ConnectionReset);
+                }
                 index += read;
             }
         }
