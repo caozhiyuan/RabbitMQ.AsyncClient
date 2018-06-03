@@ -183,46 +183,49 @@ namespace RabbitMQ.Client.Impl
 
             int type = typebuffer[0];
 
-            NetworkBinaryReader headerReader;
-            if (type == 'A')
+            NetworkBinaryReader headerReader = null;
+            try
             {
-                byte[] readerbuffer = new byte[7];
-                await reader.ReadAsync(readerbuffer, 0, readerbuffer.Length);
+                if (type == 'A')
+                {
+                    byte[] readerbuffer = new byte[7];
+                    await reader.ReadAsync(readerbuffer, 0, readerbuffer.Length);
 
-                headerReader = new NetworkBinaryReader(new MemoryStream(readerbuffer));
-                // Probably an AMQP protocol header, otherwise meaningless
-                ProcessProtocolHeader(headerReader);
+                    headerReader = new NetworkBinaryReader(new MemoryStream(readerbuffer));
+                    // Probably an AMQP protocol header, otherwise meaningless
+                    ProcessProtocolHeader(headerReader);
+                }
+
+                byte[] headerbuffer = new byte[6];
+                await reader.ReadAsync(headerbuffer, 0, headerbuffer.Length);
+
+                headerReader = new NetworkBinaryReader(new MemoryStream(headerbuffer));
+
+                int channel = headerReader.ReadUInt16();
+                int payloadSize = headerReader.ReadInt32(); // FIXME - throw exn on unreasonable value
+
+                byte[] payload = new byte[payloadSize];
+                await reader.ReadAsync(payload, 0, payload.Length);
+                if (payload.Length != payloadSize)
+                {
+                    // Early EOF.
+                    throw new MalformedFrameException("Short frame - expected " +
+                                                      payloadSize + " bytes, got " +
+                                                      payload.Length + " bytes");
+                }
+
+                int frameEndMarker = reader.ReadByte();
+                if (frameEndMarker != Constants.FrameEnd)
+                {
+                    throw new MalformedFrameException("Bad frame end marker: " + frameEndMarker);
+                }
+
+                return new InboundFrame((FrameType)type, channel, payload);
             }
-
-            byte[] headerbuffer = new byte[6];
-            await reader.ReadAsync(headerbuffer, 0, headerbuffer.Length);
-
-            headerReader = new NetworkBinaryReader(new MemoryStream(headerbuffer));
-
-            int channel = headerReader.ReadUInt16();
-            int payloadSize = headerReader.ReadInt32(); // FIXME - throw exn on unreasonable value
-
-            byte[] payloadbuffer = new byte[payloadSize];
-            await reader.ReadAsync(payloadbuffer, 0, payloadbuffer.Length);
-
-            var payloadReader = new NetworkBinaryReader(new MemoryStream(payloadbuffer));
-
-            byte[] payload = payloadReader.ReadBytes(payloadSize);
-            if (payload.Length != payloadSize)
+            finally
             {
-                // Early EOF.
-                throw new MalformedFrameException("Short frame - expected " +
-                                                  payloadSize + " bytes, got " +
-                                                  payload.Length + " bytes");
-            }
-
-            int frameEndMarker = reader.ReadByte();
-            if (frameEndMarker != Constants.FrameEnd)
-            {
-                throw new MalformedFrameException("Bad frame end marker: " + frameEndMarker);
-            }
-
-            return new InboundFrame((FrameType)type, channel, payload);
+                headerReader?.Dispose();
+            }      
         }
 
         public NetworkBinaryReader GetReader()
