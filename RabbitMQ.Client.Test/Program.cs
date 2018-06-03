@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using RabbitMQ.Client.Events;
 
 namespace RabbitMQ.Client.Test
@@ -15,11 +16,15 @@ namespace RabbitMQ.Client.Test
             Console.ReadLine();
         }
 
+        public class Test
+        {
+            public int Id { get; set; }
+
+            public string Name { get; set; }
+        }
+
         private static async Task AsyncTest()
         {
-            string msg =
-                "{\"Id\":1,\"CityId\":1,\"CityFlag\":\"sz\",\"WebApiUrl\":\"https://api1.34580.com/\",\"ImageSiteUrl\":\"http://picpro-sz.34580.com/\",\"CityName\":\"苏州市\"}";
-
             var  factory = new ConnectionFactory
             {
                 UserName = "shampoo",
@@ -49,7 +54,7 @@ namespace RabbitMQ.Client.Test
                     if (mm % 10000 == 0)
                     {
                         sw0.Stop();
-                        Console.Write($" {mm}recv {sw0.ElapsedMilliseconds}ms ");
+                        Console.Write($" {mm}recv {sw0.ElapsedMilliseconds}ms {Encoding.UTF8.GetString(ea.Body)}");
                         sw0.Restart();
                     }
                     await channel.BasicAck(ea.DeliveryTag, false);
@@ -62,9 +67,7 @@ namespace RabbitMQ.Client.Test
                     Console.WriteLine("FlowControl");
                     return Task.CompletedTask;
                 };
-
-                var messageBodyBytes = Encoding.UTF8.GetBytes(msg);
-
+                int id = 0;
                 while (true)
                 {
                     Stopwatch sw = new Stopwatch();
@@ -74,6 +77,11 @@ namespace RabbitMQ.Client.Test
                     CountdownEvent k = new CountdownEvent(c);
                     Parallel.For(0, c, (i) =>
                     {
+                        var messageBodyBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new Test()
+                        {
+                            Id = Interlocked.Increment(ref id),
+                            Name = "Queue asynctest in virtual host /"
+                        }));
                         var task = channel.BasicPublish("asynctest", "asynctest", true, null, messageBodyBytes);
                         task.ContinueWith(n =>
                         {
