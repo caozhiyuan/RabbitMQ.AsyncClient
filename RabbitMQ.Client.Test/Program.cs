@@ -37,13 +37,15 @@ namespace RabbitMQ.Client.Test
                 await channel.QueueDeclare("asynctest", true, false, false, null);
                 await channel.QueueBind("asynctest", "asynctest", "asynctest", null);
 
+                await channel.BasicQos(0, 100, false);
                 AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.Received += async (ch, ea) =>
                 {
                     Console.WriteLine(Encoding.UTF8.GetString(ea.Body));
                     await channel.BasicAck(ea.DeliveryTag, false);
                 };
-                var consumerTag = await channel.BasicConsume("asynctest", false, consumer);         
+                var consumerTag = await channel.BasicConsume("asynctest", false, consumer);
+                Console.ReadLine();
 
                 var messageBodyBytes = Encoding.UTF8.GetBytes(msg);
 

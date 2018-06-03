@@ -48,7 +48,7 @@ namespace RabbitMQ.Client.Impl
 {
     public class SimpleBlockingRpcContinuation : IRpcContinuation
     {
-        public readonly TaskCompletionSource<Either> m_cell = new TaskCompletionSource<Either>();
+        public readonly TaskCompletionSource<Either> m_cell = new TaskCompletionSource<Either>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public virtual async Task<Command> GetReply()
         {

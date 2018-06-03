@@ -62,7 +62,7 @@ namespace RabbitMQ.Client
             {
                 this.model = model;
                 workQueue = new ConcurrentQueue<Work>();
-                messageArrived = new TaskCompletionSource<bool>();
+                messageArrived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 waitTime = TimeSpan.FromMilliseconds(100);
                 tokenSource = new CancellationTokenSource();
             }
@@ -90,7 +90,7 @@ namespace RabbitMQ.Client
 
                     await Task.WhenAny(Task.Delay(waitTime, tokenSource.Token), messageArrived.Task).ConfigureAwait(false);
                     messageArrived.TrySetResult(true);
-                    messageArrived = new TaskCompletionSource<bool>();
+                    messageArrived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
 

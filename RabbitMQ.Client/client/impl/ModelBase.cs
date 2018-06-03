@@ -708,9 +708,9 @@ namespace RabbitMQ.Client.Impl
             return Session.Transmit(cmd);
         }
 
-        void IDisposable.Dispose()
+        public Task Dispose()
         {
-            Abort();
+            return Abort();
         }
 
         public abstract Task ConnectionTuneOk(ushort channelMax,
@@ -888,7 +888,7 @@ namespace RabbitMQ.Client.Impl
             Session.Close(CloseReason, false);
             try
             {
-                _Private_ChannelCloseOk();
+                _Private_ChannelCloseOk().GetAwaiter().GetResult();
             }
             finally
             {
@@ -906,13 +906,14 @@ namespace RabbitMQ.Client.Impl
             if (active)
             {
                 m_flowControlBlock.Set();
-                _Private_ChannelFlowOk(active);
             }
             else
             {
                 m_flowControlBlock.Reset();
-                _Private_ChannelFlowOk(active);
             }
+
+            _Private_ChannelFlowOk(active).GetAwaiter().GetResult();
+
             OnFlowControl(new FlowControlEventArgs(active));
         }
 
@@ -936,7 +937,7 @@ namespace RabbitMQ.Client.Impl
             try
             {
                 ((Connection)Session.Connection).InternalClose(reason);
-                _Private_ConnectionCloseOk();
+                _Private_ConnectionCloseOk().GetAwaiter().GetResult();
                 SetCloseReason((Session.Connection).CloseReason);
             }
             catch (IOException)
@@ -1131,14 +1132,14 @@ namespace RabbitMQ.Client.Impl
         public abstract Task<uint> _Private_QueuePurge(string queue,
             bool nowait);
 
-        public void Abort()
+        public Task Abort()
         {
-            Abort(Constants.ReplySuccess, "Goodbye");
+            return Abort(Constants.ReplySuccess, "Goodbye");
         }
 
-        public void Abort(ushort replyCode, string replyText)
+        public Task Abort(ushort replyCode, string replyText)
         {
-            Close(replyCode, replyText, true);
+            return Close(replyCode, replyText, true);
         }
 
         public abstract Task BasicAck(ulong deliveryTag, bool multiple);

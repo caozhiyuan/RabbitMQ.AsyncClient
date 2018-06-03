@@ -378,9 +378,9 @@ namespace RabbitMQ.Client.Impl
             return m_delegate.ToString();
         }
 
-        void IDisposable.Dispose()
+        public Task Dispose()
         {
-            Abort();
+            return Abort();
         }
 
         public Task ConnectionTuneOk(ushort channelMax,
@@ -718,11 +718,11 @@ namespace RabbitMQ.Client.Impl
             return m_delegate._Private_QueuePurge(queue, nowait);
         }
 
-        public void Abort()
+        public async Task Abort()
         {
             try
             {
-                m_delegate.Abort();
+                await m_delegate.Abort();
             }
             finally
             {
@@ -730,11 +730,11 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public void Abort(ushort replyCode, string replyText)
+        public async Task Abort(ushort replyCode, string replyText)
         {
             try
             {
-                m_delegate.Abort(replyCode, replyText);
+                await m_delegate.Abort(replyCode, replyText);
             }
             finally
             {

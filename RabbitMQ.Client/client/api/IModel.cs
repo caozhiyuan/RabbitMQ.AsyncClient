@@ -55,7 +55,7 @@ namespace RabbitMQ.Client
     /// Extends the <see cref="IDisposable"/> interface, so that the "using"
     /// statement can be used to scope the lifetime of a channel when appropriate.
     /// </remarks>
-    public interface IModel : IDisposable
+    public interface IModel
     {
         /// <summary>
         /// Channel number, unique per connections.
@@ -165,7 +165,7 @@ namespace RabbitMQ.Client
         /// <see cref="Exceptions.AlreadyClosedException"/> or <see cref="System.IO.IOException"/> or any other <see cref="Exception"/> during closing model.
         /// </remarks>
         [AmqpMethodDoNotImplement(null)]
-        void Abort();
+        Task Abort();
 
         /// <summary>
         /// Abort this session.
@@ -181,7 +181,7 @@ namespace RabbitMQ.Client
         /// </para>
         /// </remarks>
         [AmqpMethodDoNotImplement(null)]
-        void Abort(ushort replyCode, string replyText);
+        Task Abort(ushort replyCode, string replyText);
 
         /// <summary>
         /// Acknowledge one or more delivered message(s).

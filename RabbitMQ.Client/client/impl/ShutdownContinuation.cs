@@ -46,7 +46,7 @@ namespace RabbitMQ.Client.Impl
 {
     public class ShutdownContinuation
     {
-        public readonly TaskCompletionSource<ShutdownEventArgs> m_cell = new TaskCompletionSource<ShutdownEventArgs>();
+        public readonly TaskCompletionSource<ShutdownEventArgs> m_cell = new TaskCompletionSource<ShutdownEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // You will note there are two practically identical overloads
         // of OnShutdown() here. This is because Microsoft's C#
