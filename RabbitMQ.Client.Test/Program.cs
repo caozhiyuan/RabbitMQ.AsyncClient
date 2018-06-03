@@ -45,7 +45,8 @@ namespace RabbitMQ.Client.Test
                     await channel.BasicAck(ea.DeliveryTag, false);
                 };
                 var consumerTag = await channel.BasicConsume("asynctest", false, consumer);
-   
+                Console.ReadLine();
+
                 var messageBodyBytes = Encoding.UTF8.GetBytes(msg);
 
                 while (true)
