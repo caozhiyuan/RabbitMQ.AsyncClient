@@ -87,7 +87,7 @@ namespace RabbitMQ.Client.SyncTest
                     });
                     k.Wait();
                     Console.WriteLine("mqtest " + sw.ElapsedMilliseconds);
-                    Thread.Sleep(6000);
+                    Thread.Sleep(500);
                 }
             }
             finally
