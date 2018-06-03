@@ -39,13 +39,24 @@ namespace RabbitMQ.Client.Test
 
                 await channel.BasicQos(0, 100, false);
                 AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
+
+                int mm = 0;
                 consumer.Received += async (ch, ea) =>
                 {
-                    //Console.WriteLine(Encoding.UTF8.GetString(ea.Body));
+                    Interlocked.Increment(ref mm);
+                    if (mm % 10000 == 0)
+                    {
+                        Console.Write($" {mm} ");
+                    }
                     await channel.BasicAck(ea.DeliveryTag, false);
                 };
-                //var consumerTag = await channel.BasicConsume("asynctest", false, consumer);
-                Console.ReadLine();
+                var consumerTag = await channel.BasicConsume("asynctest", false, consumer);
+
+                channel.FlowControl += (s, e) =>
+                {
+                    Console.WriteLine("FlowControl");
+                    return Task.CompletedTask;
+                };
 
                 var messageBodyBytes = Encoding.UTF8.GetBytes(msg);
 
