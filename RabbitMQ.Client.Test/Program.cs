@@ -94,7 +94,7 @@ namespace RabbitMQ.Client.Test
                     });
                     k.Wait();
                     Console.WriteLine("mqtest " + sw.ElapsedMilliseconds);
-                    await Task.Delay(500);
+                    await Task.Delay(5000);
                 }
             }
             finally
