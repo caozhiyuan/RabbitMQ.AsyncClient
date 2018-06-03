@@ -134,7 +134,7 @@ namespace RabbitMQ.Client.MessagePatterns
         /// request may result in OperationInterruptedException before
         /// the request is even sent.
         ///</remarks>
-        public event EventHandler Disconnected;
+        public event AsyncEventHandler<EventArgs> Disconnected;
 
         ///<summary>This event is fired whenever Call() decides that a
         ///timeout has occurred while waiting for a reply from the
@@ -142,7 +142,7 @@ namespace RabbitMQ.Client.MessagePatterns
         ///<remarks>
         /// See also OnTimedOut().
         ///</remarks>
-        public event EventHandler TimedOut;
+        public event AsyncEventHandler<EventArgs> TimedOut;
 
         ///<summary>Retrieve or modify the address that will be used
         ///for the next Call() or Cast().</summary>
@@ -373,11 +373,11 @@ namespace RabbitMQ.Client.MessagePatterns
         ///<remarks>
         /// Fires the Disconnected event.
         ///</remarks>
-        public virtual void OnDisconnected()
+        public virtual async Task OnDisconnected(EventArgs obj)
         {
             if (Disconnected != null)
             {
-                Disconnected(this, null);
+                await Disconnected(this, obj);
             }
         }
 
@@ -386,11 +386,11 @@ namespace RabbitMQ.Client.MessagePatterns
         ///<remarks>
         /// Fires the TimedOut event.
         ///</remarks>
-        public virtual void OnTimedOut()
+        public virtual async Task OnTimedOut(EventArgs obj)
         {
             if (TimedOut != null)
             {
-                TimedOut(this, null);
+                await TimedOut(this, obj);
             }
         }
 
@@ -411,6 +411,7 @@ namespace RabbitMQ.Client.MessagePatterns
             {
                 string queueName = await Model.QueueDeclare();
                 Subscription = new Subscription(Model, queueName);
+                await Subscription.Subscribe("");
             }
         }
 
@@ -426,13 +427,13 @@ namespace RabbitMQ.Client.MessagePatterns
             BasicDeliverEventArgs reply;
             if (!Subscription.Next(TimeoutMilliseconds, out reply))
             {
-                OnTimedOut();
+                await OnTimedOut(null);
                 return null;
             }
 
             if (reply == null)
             {
-                OnDisconnected();
+                await OnDisconnected(null);
                 return null;
             }
 

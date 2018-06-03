@@ -176,28 +176,25 @@ namespace RabbitMQ.Client.MessagePatterns
         /// to use the isRedelivered flag.
         ///</para>
         ///</remarks>
-        public virtual byte[] HandleCall(bool isRedelivered,
+        public virtual async Task<Tuple<byte[], IBasicProperties>> HandleCall(bool isRedelivered,
             IBasicProperties requestProperties,
-            byte[] body,
-            out IBasicProperties replyProperties)
+            byte[] body)
         {
             if (requestProperties.ContentType == StreamMessageBuilder.MimeType)
             {
                 IStreamMessageReader r = new StreamMessageReader(requestProperties, body);
                 IStreamMessageBuilder w = new StreamMessageBuilder(m_subscription.Model);
-                HandleStreamMessageCall(w,
+                await HandleStreamMessageCall(w,
                     isRedelivered,
                     requestProperties,
                     r.ReadObjects());
-                replyProperties = (IBasicProperties)w.GetContentHeader();
-                return w.GetContentBody();
+                return Tuple.Create(w.GetContentBody(), (IBasicProperties) w.GetContentHeader());
             }
             else
             {
-                return HandleSimpleCall(isRedelivered,
+                return await HandleSimpleCall(isRedelivered,
                     requestProperties,
-                    body,
-                    out replyProperties);
+                    body);
             }
         }
 
@@ -226,21 +223,21 @@ namespace RabbitMQ.Client.MessagePatterns
         /// to use the isRedelivered flag.
         ///</para>
         ///</remarks>
-        public virtual void HandleCast(bool isRedelivered,
+        public virtual Task HandleCast(bool isRedelivered,
             IBasicProperties requestProperties,
             byte[] body)
         {
             if (requestProperties.ContentType == StreamMessageBuilder.MimeType)
             {
                 IStreamMessageReader r = new StreamMessageReader(requestProperties, body);
-                HandleStreamMessageCall(null,
+                return HandleStreamMessageCall(null,
                     isRedelivered,
                     requestProperties,
                     r.ReadObjects());
             }
             else
             {
-                HandleSimpleCast(isRedelivered, requestProperties, body);
+                return HandleSimpleCast(isRedelivered, requestProperties, body);
             }
         }
 
@@ -255,14 +252,12 @@ namespace RabbitMQ.Client.MessagePatterns
         /// array to send back to the remote caller as a reply
         /// message.
         ///</remarks>
-        public virtual byte[] HandleSimpleCall(bool isRedelivered,
+        public virtual Task<Tuple<byte[], IBasicProperties>> HandleSimpleCall(bool isRedelivered,
             IBasicProperties requestProperties,
-            byte[] body,
-            out IBasicProperties replyProperties)
+            byte[] body)
         {
             // Override to do something with the request.
-            replyProperties = null;
-            return null;
+            return Task.FromResult(Tuple.Create<byte[], IBasicProperties>(null, null));
         }
 
         ///<summary>Called by the default HandleCast() implementation
@@ -273,11 +268,13 @@ namespace RabbitMQ.Client.MessagePatterns
         /// (e.g. "jms/stream-message"), this method is called instead
         /// with the raw bytes of the request.
         ///</remarks>
-        public virtual void HandleSimpleCast(bool isRedelivered,
+        public virtual Task HandleSimpleCast(bool isRedelivered,
             IBasicProperties requestProperties,
             byte[] body)
         {
             // Override to do something with the request.
+
+            return Task.CompletedTask;
         }
 
         ///<summary>Called by HandleCall and HandleCast when a
@@ -301,12 +298,13 @@ namespace RabbitMQ.Client.MessagePatterns
         /// remote callers.
         ///</para>
         ///</remarks>
-        public virtual void HandleStreamMessageCall(IStreamMessageBuilder replyWriter,
+        public virtual Task HandleStreamMessageCall(IStreamMessageBuilder replyWriter,
             bool isRedelivered,
             IBasicProperties requestProperties,
             object[] args)
         {
             // Override to do something with the request.
+            return Task.CompletedTask;
         }
 
         ///<summary>Enters the main loop of the RPC service.</summary>
@@ -324,15 +322,15 @@ namespace RabbitMQ.Client.MessagePatterns
         /// a result of disconnection, or of a call to Close().
         ///</para>
         ///</remarks>
-        public void MainLoop()
+        public async Task MainLoop()
         {
             foreach (BasicDeliverEventArgs evt in m_subscription)
             {
-                ProcessRequest(evt);
-                m_subscription.Ack();
+                await ProcessRequest(evt);
+                await m_subscription.Ack();
                 if (Transactional)
                 {
-                    m_subscription.Model.TxCommit();
+                    await m_subscription.Model.TxCommit();
                 }
             }
         }
@@ -364,7 +362,7 @@ namespace RabbitMQ.Client.MessagePatterns
         /// communication.
         ///</para>
         ///</remarks>
-        public virtual void ProcessRequest(BasicDeliverEventArgs evt)
+        public virtual async Task ProcessRequest(BasicDeliverEventArgs evt)
         {
             IBasicProperties properties = evt.BasicProperties;
             if (properties.ReplyTo != null && properties.ReplyTo != "")
@@ -378,26 +376,26 @@ namespace RabbitMQ.Client.MessagePatterns
                         "",
                         properties.ReplyTo);
                 }
-
-                IBasicProperties replyProperties;
-                byte[] reply = HandleCall(evt.Redelivered,
+                
+                var reply = await HandleCall(evt.Redelivered,
                     properties,
-                    evt.Body,
-                    out replyProperties);
+                    evt.Body);
+
+                var replyProperties = reply.Item2;
                 if (replyProperties == null)
                 {
                     replyProperties = m_subscription.Model.CreateBasicProperties();
                 }
 
                 replyProperties.CorrelationId = properties.CorrelationId;
-                m_subscription.Model.BasicPublish(replyAddress,
+                await m_subscription.Model.BasicPublish(replyAddress,
                     replyProperties,
-                    reply);
+                    reply.Item1);
             }
             else
             {
                 // It's an asynchronous message.
-                HandleCast(evt.Redelivered, properties, evt.Body);
+                await HandleCast(evt.Redelivered, properties, evt.Body);
             }
         }
 
@@ -415,9 +413,9 @@ namespace RabbitMQ.Client.MessagePatterns
         /// called. (TxSelect is idempotent, so this is harmless.)
         ///</para>
         ///</remarks>
-        public void SetTransactional()
+        public async Task SetTransactional()
         {
-            m_subscription.Model.TxSelect();
+            await m_subscription.Model.TxSelect();
             Transactional = true;
         }
 
