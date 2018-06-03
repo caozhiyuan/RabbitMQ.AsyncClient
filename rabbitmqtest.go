@@ -1,3 +1,27 @@
+// Copyright ? 2016 Alan A. A. Donovan & Brian W. Kernighan.
+// License: https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+// See page 29.
+//!+
+/*
+// Ftoc prints two Fahrenheit-to-Celsius conversions.
+package main
+
+import "fmt"
+
+func main() {
+	const freezingF, boilingF = 32.0, 212.0
+	fmt.Printf("%g°„F = %g°„C\n", freezingF, fToC(freezingF)) // "32°„F = 0°„C"
+	fmt.Printf("%g°„F = %g°„C\n", boilingF, fToC(boilingF))   // "212°„F = 100°„C"
+}
+
+func fToC(f float64) float64 {
+	return (f - 32) * 5 / 9
+}
+
+//!-*/
+
+
 package main
 
 import (
@@ -6,7 +30,9 @@ import (
 	"bytes"
 	"github.com/streadway/amqp"
 	"github.com/fatih/stopwatch"
+	"sync"
 	"time"
+	"runtime"
 )
 
 var conn *amqp.Connection
@@ -20,6 +46,9 @@ const (
 )
 
 func main() {
+
+	maxProcs := runtime.NumCPU()
+	runtime.GOMAXPROCS(maxProcs)
 
 	var err error
 	conn, err = amqp.Dial(mqurl)
@@ -43,20 +72,30 @@ func main() {
 	go func() {
 		s := stopwatch.New()
 		s.Start(0)
-		i := 1
+
+		var  wg sync.WaitGroup
+
 		for {
-			push()
-			i = i + 1
-			if i % 10000 == 0 {
-				s.Stop()
-				fmt.Printf("push Milliseconds elapsed: %v\n", s.ElapsedTime())
+			for  k := 0; k < 10000; k = k + 1   {
 
-				time.Sleep(6*time.Second)
+				wg.Add(1)
 
-			    s.Reset()
-				s.Start(0)
+				go func() {
+					defer wg.Add(-1)
+					push()
+				}()
 
 			}
+
+			wg.Wait()
+
+			s.Stop()
+			fmt.Printf("push Milliseconds elapsed: %v\n", s.ElapsedTime())
+
+			time.Sleep(6*time.Second)
+
+			s.Reset()
+			s.Start(0)
 		}
 	}()
 
@@ -96,7 +135,6 @@ func close() {
 	conn.Close()
 }
 
-//¡¨Ω”rabbitmq server
 func push() {
 
 	msgContent := "hello world!"
