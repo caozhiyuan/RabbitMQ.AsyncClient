@@ -179,7 +179,7 @@ namespace RabbitMQ.Client.Impl
         public static async Task<InboundFrame> ReadFrom(Stream reader)
         {
             byte[] typebuffer = new byte[1];
-            await reader.ReadAsync(typebuffer, 0, typebuffer.Length);
+            await ReadAsync(reader, typebuffer);
 
             int type = typebuffer[0];
 
@@ -189,7 +189,7 @@ namespace RabbitMQ.Client.Impl
                 if (type == 'A')
                 {
                     byte[] readerbuffer = new byte[7];
-                    await reader.ReadAsync(readerbuffer, 0, readerbuffer.Length);
+                    await ReadAsync(reader, readerbuffer); 
 
                     headerReader = new NetworkBinaryReader(new MemoryStream(readerbuffer));
                     // Probably an AMQP protocol header, otherwise meaningless
@@ -197,7 +197,7 @@ namespace RabbitMQ.Client.Impl
                 }
 
                 byte[] headerbuffer = new byte[6];
-                await reader.ReadAsync(headerbuffer, 0, headerbuffer.Length);
+                await ReadAsync(reader, headerbuffer);
 
                 headerReader = new NetworkBinaryReader(new MemoryStream(headerbuffer));
 
@@ -205,7 +205,7 @@ namespace RabbitMQ.Client.Impl
                 int payloadSize = headerReader.ReadInt32(); // FIXME - throw exn on unreasonable value
 
                 byte[] payload = new byte[payloadSize];
-                await reader.ReadAsync(payload, 0, payload.Length);
+                await ReadAsync(reader, payload);
                 if (payload.Length != payloadSize)
                 {
                     // Early EOF.
@@ -215,7 +215,7 @@ namespace RabbitMQ.Client.Impl
                 }
 
                 var frameEndMarkerbuffer = new byte[1];
-                await reader.ReadAsync(frameEndMarkerbuffer, 0, frameEndMarkerbuffer.Length);
+                await ReadAsync(reader, frameEndMarkerbuffer);
                 int frameEndMarker = frameEndMarkerbuffer[0];
                 if (frameEndMarker != Constants.FrameEnd)
                 {
@@ -228,6 +228,17 @@ namespace RabbitMQ.Client.Impl
             {
                 headerReader?.Dispose();
             }      
+        }
+
+        private static async Task ReadAsync(Stream reader, byte[] byteBuffer)
+        {
+            int size = byteBuffer.Length;
+            int index = 0;
+            while (index < size)
+            {
+                int read = await reader.ReadAsync(byteBuffer, index, size - index);
+                index += read;
+            }
         }
 
         public NetworkBinaryReader GetReader()
