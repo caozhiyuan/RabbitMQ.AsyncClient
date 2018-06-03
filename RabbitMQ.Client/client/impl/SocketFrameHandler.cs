@@ -254,9 +254,9 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        private async Task WriteFrameBuffer(byte[] buffer)
+        private Task WriteFrameBuffer(byte[] buffer)
         {
-            await m_netstream.WriteAsync(buffer, 0, buffer.Length);
+            return m_netstream.WriteAsync(buffer, 0, buffer.Length);
         }
 
         private bool ShouldTryIPv6(AmqpTcpEndpoint endpoint)
