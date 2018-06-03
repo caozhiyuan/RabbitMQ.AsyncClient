@@ -214,7 +214,9 @@ namespace RabbitMQ.Client.Impl
                                                       payload.Length + " bytes");
                 }
 
-                int frameEndMarker = reader.ReadByte();
+                var frameEndMarkerbuffer = new byte[1];
+                await reader.ReadAsync(frameEndMarkerbuffer, 0, frameEndMarkerbuffer.Length);
+                int frameEndMarker = frameEndMarkerbuffer[0];
                 if (frameEndMarker != Constants.FrameEnd)
                 {
                     throw new MalformedFrameException("Bad frame end marker: " + frameEndMarker);
