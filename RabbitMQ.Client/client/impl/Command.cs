@@ -57,7 +57,7 @@ namespace RabbitMQ.Client.Impl
         // - 4 bytes of frame payload length
         // - 1 byte of payload trailer FrameEnd byte
         private const int EmptyFrameSize = 8;
-        private readonly MemoryStream m_body;
+        private byte[] m_body;
         private static readonly byte[] m_emptyByteArray = new byte[0];
 
         static Command()
@@ -67,12 +67,12 @@ namespace RabbitMQ.Client.Impl
 
         public Command() : this(null, null, null)
         {
-            m_body = new MemoryStream();
+            m_body = m_emptyByteArray;
         }
 
         public Command(MethodBase method) : this(method, null, null)
         {
-            m_body = new MemoryStream();
+            m_body = m_emptyByteArray;
         }
 
         public Command(MethodBase method, ContentHeaderBase header, byte[] body)
@@ -81,11 +81,11 @@ namespace RabbitMQ.Client.Impl
             Header = header;
             if (body != null)
             {
-                m_body = new MemoryStream(body);
+                m_body = body;
             }
             else
             {
-                m_body = new MemoryStream();
+                m_body = m_emptyByteArray;
             }
         }
 
@@ -101,18 +101,20 @@ namespace RabbitMQ.Client.Impl
         public static void CheckEmptyFrameSize()
         {
             var f = new EmptyOutboundFrame();
-            var stream = new MemoryStream();
-            var writer = new NetworkBinaryWriter(stream);
-            f.WriteTo(writer);
-            long actualLength = stream.Length;
-
-            if (EmptyFrameSize != actualLength)
+            using (var stream = new MemoryStream())
             {
-                string message =
-                    string.Format("EmptyFrameSize is incorrect - defined as {0} where the computed value is in fact {1}.",
-                        EmptyFrameSize,
-                        actualLength);
-                throw new ProtocolViolationException(message);
+                var writer = new NetworkBinaryWriter(stream);
+                f.WriteTo(writer);
+                long actualLength = stream.Length;
+
+                if (EmptyFrameSize != actualLength)
+                {
+                    string message =
+                        string.Format("EmptyFrameSize is incorrect - defined as {0} where the computed value is in fact {1}.",
+                            EmptyFrameSize,
+                            actualLength);
+                    throw new ProtocolViolationException(message);
+                }
             }
         }
 
@@ -120,13 +122,17 @@ namespace RabbitMQ.Client.Impl
         {
             if (fragment != null)
             {
-                m_body.Write(fragment, 0, fragment.Length);
+                byte[] resArr = new byte[fragment.Length + m_body.Length];
+                m_body.CopyTo(resArr, 0);
+                fragment.CopyTo(resArr, m_body.Length);
+
+                m_body = resArr;
             }
         }
 
         public byte[] ConsolidateBody()
         {
-            return m_body.Length == 0 ? m_emptyByteArray : m_body.ToArray();
+            return m_body;
         }
 
         public Task Transmit(int channelNumber, Connection connection)
@@ -140,8 +146,6 @@ namespace RabbitMQ.Client.Impl
                 return TransmitAsSingleFrame(channelNumber, connection);
             }
         }
-
-
 
         public Task TransmitAsSingleFrame(int channelNumber, Connection connection)
         {
@@ -169,7 +173,6 @@ namespace RabbitMQ.Client.Impl
 
             return connection.WriteFrameSet(frames);
         }
-
 
         public static List<OutboundFrame> CalculateFrames(int channelNumber, Connection connection, IList<Command> commands)
         {
