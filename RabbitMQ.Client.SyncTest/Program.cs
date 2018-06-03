@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using RabbitMQ.Client.Events;
 
 namespace RabbitMQ.Client.SyncTest
@@ -15,11 +16,16 @@ namespace RabbitMQ.Client.SyncTest
             Console.ReadLine();
         }
 
+
+        public class Test
+        {
+            public int Id { get; set; }
+
+            public string Name { get; set; }
+        }
+
         private static void AsyncTest()
         {
-            string msg =
-                "{\"Id\":1,\"CityId\":1,\"CityFlag\":\"sz\",\"WebApiUrl\":\"https://api1.34580.com/\",\"ImageSiteUrl\":\"http://picpro-sz.34580.com/\",\"CityName\":\"苏州市\"}";
-
             var factory = new ConnectionFactory
             {
                 UserName = "shampoo",
@@ -37,19 +43,31 @@ namespace RabbitMQ.Client.SyncTest
                 channel.QueueDeclare("asynctest", true, false, false, null);
                 channel.QueueBind("asynctest", "asynctest", "asynctest", null);
 
-
+                int mm = 0;
+                Stopwatch sw0 = new Stopwatch();
+                sw0.Start();
                 AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.Received += (ch, ea) =>
                 {
-                    Console.WriteLine(Encoding.UTF8.GetString(ea.Body));
+                    Interlocked.Increment(ref mm);
+                    if (mm % 10000 == 0)
+                    {
+                        sw0.Stop();
+                        Console.WriteLine($" {mm}recv {sw0.ElapsedMilliseconds}ms {Encoding.UTF8.GetString(ea.Body)}");
+                        sw0.Restart();
+                    }
                     channel.BasicAck(ea.DeliveryTag, false);
                     return Task.CompletedTask;
                 };
                 var consumerTag = channel.BasicConsume("asynctest", false, consumer);
+                Console.WriteLine($"consumerTag {consumerTag}");
 
+                channel.FlowControl += (s, e) =>
+                {
+                    Console.WriteLine("FlowControl");
+                };
 
-                var messageBodyBytes = Encoding.UTF8.GetBytes(msg);
-
+                int id = 0;
                 while (true)
                 {
                     Stopwatch sw = new Stopwatch();
@@ -59,6 +77,11 @@ namespace RabbitMQ.Client.SyncTest
                     CountdownEvent k = new CountdownEvent(c);
                     Parallel.For(0, c, (i) =>
                     {
+                        var messageBodyBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new Test()
+                        {
+                            Id = Interlocked.Increment(ref id),
+                            Name = "Queue asynctest in virtual host /"
+                        }));
                         channel.BasicPublish("asynctest", "asynctest", true, null, messageBodyBytes);
                         k.Signal(1);
                     });
