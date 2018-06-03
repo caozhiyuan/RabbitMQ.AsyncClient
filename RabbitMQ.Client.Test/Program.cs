@@ -55,6 +55,7 @@ namespace RabbitMQ.Client.Test
                     await channel.BasicAck(ea.DeliveryTag, false);
                 };
                 var consumerTag = await channel.BasicConsume("asynctest", false, consumer);
+                Console.WriteLine($"consumerTag {consumerTag}");
 
                 channel.FlowControl += (s, e) =>
                 {
