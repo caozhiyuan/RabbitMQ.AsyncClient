@@ -41,12 +41,16 @@ namespace RabbitMQ.Client.Test
                 AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
 
                 int mm = 0;
+                Stopwatch sw0 = new Stopwatch();
+                sw0.Start();
                 consumer.Received += async (ch, ea) =>
                 {
                     Interlocked.Increment(ref mm);
                     if (mm % 10000 == 0)
                     {
-                        Console.Write($" {mm} ");
+                        sw0.Stop();
+                        Console.Write($" {mm}recv {sw0.ElapsedMilliseconds}ms ");
+                        sw0.Restart();
                     }
                     await channel.BasicAck(ea.DeliveryTag, false);
                 };
