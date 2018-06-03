@@ -73,7 +73,7 @@ namespace RabbitMQ.Client.Test
                     Stopwatch sw = new Stopwatch();
                     sw.Start();
 
-                    const int c = 20000;
+                    const int c = 10000;
                     CountdownEvent k = new CountdownEvent(c);
                     Parallel.For(0, c, (i) =>
                     {
@@ -94,7 +94,7 @@ namespace RabbitMQ.Client.Test
                     });
                     k.Wait();
                     Console.WriteLine("mqtest " + sw.ElapsedMilliseconds);
-                    Console.ReadLine();
+                    await Task.Delay(6000);
                 }
             }
             finally
