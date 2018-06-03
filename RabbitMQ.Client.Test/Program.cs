@@ -41,7 +41,7 @@ namespace RabbitMQ.Client.Test
                 AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.Received += async (ch, ea) =>
                 {
-                    Console.WriteLine(Encoding.UTF8.GetString(ea.Body));
+                    //Console.WriteLine(Encoding.UTF8.GetString(ea.Body));
                     await channel.BasicAck(ea.DeliveryTag, false);
                 };
                 var consumerTag = await channel.BasicConsume("asynctest", false, consumer);
