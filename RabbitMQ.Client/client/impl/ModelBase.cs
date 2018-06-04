@@ -49,6 +49,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using RabbitMQ.Client.util;
 
 #if (NETFX_CORE)
 using Trace = System.Diagnostics.Debug;
@@ -68,7 +69,7 @@ namespace RabbitMQ.Client.Impl
         private TimeSpan m_continuationTimeout = TimeSpan.FromSeconds(20);
 
         private RpcContinuationQueue m_continuationQueue = new RpcContinuationQueue();
-        private ManualResetEvent m_flowControlBlock = new ManualResetEvent(true);
+        private AsyncManualResetEvent m_flowControlBlock = new AsyncManualResetEvent(true);
 
         private readonly object m_eventLock = new object();
         private readonly object m_flowSendLock = new object();
@@ -453,16 +454,16 @@ namespace RabbitMQ.Client.Impl
             return (await k.GetReply(this.ContinuationTimeout)).Method;
         }
 
-        public Task ModelSend(MethodBase method, ContentHeaderBase header, byte[] body)
+        public async Task ModelSend(MethodBase method, ContentHeaderBase header, byte[] body)
         {
             if (method.HasContent)
             {
-                m_flowControlBlock.WaitOne();
-                return Session.Transmit(new Command(method, header, body));
+                await m_flowControlBlock.WaitAsync();
+                await Session.Transmit(new Command(method, header, body));
             }
             else
             {
-                return Session.Transmit(new Command(method, header, body));
+                await Session.Transmit(new Command(method, header, body));
             }
         }
 
@@ -1514,11 +1515,11 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        internal void SendCommands(IList<Command> commands)
+        internal async Task SendCommands(IList<Command> commands)
         {
-            m_flowControlBlock.WaitOne();
+            await m_flowControlBlock.WaitAsync();
             AllocatatePublishSeqNos(commands.Count);
-            Session.Transmit(commands);
+            await Session.Transmit(commands);
         }
 
         protected virtual void handleAckNack(ulong deliveryTag, bool multiple, bool isNack)

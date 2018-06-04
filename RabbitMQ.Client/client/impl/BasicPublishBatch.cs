@@ -38,6 +38,8 @@
 //  Copyright (c) 2007-2016 Pivotal Software, Inc.  All rights reserved.
 //---------------------------------------------------------------------------
 
+using System.Threading.Tasks;
+
 namespace RabbitMQ.Client.Impl
 {
     using System.Collections.Generic;
@@ -67,9 +69,9 @@ namespace RabbitMQ.Client.Impl
             commands.Add(new Command(method, (ContentHeaderBase)bp, body));
         }
 
-        public void Publish()
+        public Task Publish()
         {
-            model.SendCommands(commands);
+            return model.SendCommands(commands);
         }
     }
 }

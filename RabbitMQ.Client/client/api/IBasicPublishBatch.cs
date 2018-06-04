@@ -37,11 +37,14 @@
 //  The Initial Developer of the Original Code is Pivotal Software, Inc.
 //  Copyright (c) 2007-2016 Pivotal Software, Inc.  All rights reserved.
 //---------------------------------------------------------------------------
+
+using System.Threading.Tasks;
+
 namespace RabbitMQ.Client
 {
     public interface IBasicPublishBatch
     {
         void Add(string exchange, string routingKey, bool mandatory, IBasicProperties properties, byte[] body);
-        void Publish();
+        Task Publish();
     }
 }

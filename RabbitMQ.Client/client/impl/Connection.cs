@@ -61,6 +61,7 @@ using System.Text;
 using System.Threading;
 using System.Reflection;
 using System.Threading.Tasks;
+using RabbitMQ.Client.util;
 
 namespace RabbitMQ.Client.Framing.Impl
 {
@@ -71,7 +72,7 @@ namespace RabbitMQ.Client.Framing.Impl
         ///<summary>Heartbeat frame for transmission. Reusable across connections.</summary>
         private readonly EmptyOutboundFrame m_heartbeatFrame = new EmptyOutboundFrame();
 
-        private AsyncAutoResetEvent m_appContinuation = new AsyncAutoResetEvent(false);
+        private AsyncManualResetEvent m_appContinuation = new AsyncManualResetEvent(false);
         private AsyncEventHandler<CallbackExceptionEventArgs> m_callbackException;
         private AsyncEventHandler<EventArgs> m_recoverySucceeded;
         private AsyncEventHandler<ConnectionRecoveryErrorEventArgs> connectionRecoveryFailure;
@@ -451,9 +452,8 @@ namespace RabbitMQ.Client.Framing.Impl
                 }
             }
 
-            var receivedSignal = await m_appContinuation.WaitAsync(TimeSpan.FromMilliseconds(ValidatedTimeout(timeout)));
-
-            if (!receivedSignal)
+            var task = m_appContinuation.WaitAsync();
+            if (await Task.WhenAny(task, Task.Delay(ValidatedTimeout(timeout))) != task)
             {
                 m_frameHandler.Close();
             }
