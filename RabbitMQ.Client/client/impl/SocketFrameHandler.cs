@@ -42,6 +42,7 @@
 using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Util;
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Collections.Generic;
@@ -49,6 +50,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
+using RabbitMQ.Client.util;
 
 namespace RabbitMQ.Client.Impl
 {
@@ -72,10 +74,10 @@ namespace RabbitMQ.Client.Impl
         private readonly object _semaphore = new object();
         private bool _closed;
         private readonly Func<AddressFamily, ITcpClient> m_socketFactory;
-        private readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
         private readonly int m_connectionTimeout;
         private readonly int m_readTimeout;
         private readonly int m_writeTimeout;
+        private readonly AsyncQueue<TaskCompletionSource<int>> queue = new AsyncQueue<TaskCompletionSource<int>>();
 
         public SocketFrameHandler(AmqpTcpEndpoint endpoint,
             Func<AddressFamily, ITcpClient> socketFactory,
@@ -88,6 +90,26 @@ namespace RabbitMQ.Client.Impl
             this.m_connectionTimeout = connectionTimeout;
             this.m_readTimeout = readTimeout;
             this.m_writeTimeout = writeTimeout;
+        }
+        private async Task Loop()
+        {
+            while (!queue.Cleared)
+            {
+                var tsc = await queue.DequeueAsync(TimeSpan.FromMinutes(1));
+                if (tsc != null)
+                {
+                    try
+                    {
+                        var buffer = (byte[])tsc.Task.AsyncState;
+                        await m_netstream.WriteAsync(buffer, 0, buffer.Length);
+                    }
+                    catch (Exception e)
+                    {
+                        tsc.SetException(e);
+                    }
+                    tsc.SetResult(1);
+                }
+            }
         }
 
         public async Task Connect()
@@ -128,6 +150,8 @@ namespace RabbitMQ.Client.Impl
             }
 
             m_netstream = netstream;
+
+            _ = Loop();
         }
 
         public AmqpTcpEndpoint Endpoint { get; set; }
@@ -186,6 +210,7 @@ namespace RabbitMQ.Client.Impl
                 {
                     try
                     {
+                        queue.Clear();
                         m_socket.Close();
                     }
                     catch (Exception)
@@ -255,17 +280,11 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        private async Task WriteFrameBuffer(byte[] buffer)
+        private Task WriteFrameBuffer(byte[] buffer)
         {
-            await semaphoreSlim.WaitAsync();
-            try
-            {
-                await m_netstream.WriteAsync(buffer, 0, buffer.Length);
-            }
-            finally
-            {
-                semaphoreSlim.Release();
-            }
+            var tsc = new TaskCompletionSource<int>(buffer);
+            queue.Enqueue(tsc);
+            return tsc.Task;
         }
 
         private bool ShouldTryIPv6(AmqpTcpEndpoint endpoint)
