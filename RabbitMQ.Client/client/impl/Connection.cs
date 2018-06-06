@@ -1022,7 +1022,7 @@ entry.ToString());
 
         public void StartMainLoop(bool useBackgroundThread)
         {
-            Task.Run(() => MainLoop());
+            _ = MainLoop();
         }
 
         public async void HeartbeatReadTimerCallback(object state)
@@ -1067,13 +1067,11 @@ entry.ToString());
                     _heartbeatReadTimer.Change(Heartbeat * 1000, Timeout.Infinite);
                 }
             }
-            catch (ObjectDisposedException)
+            catch (Exception)
             {
                 // timer is already disposed,
-                // e.g. due to shutdown
-            }
-            catch (NullReferenceException)
-            {
+                // e.g. due to shutdown 
+
                 // timer has already been disposed from a different thread after null check
                 // this event should be rare
             }
@@ -1107,7 +1105,7 @@ entry.ToString());
                     await FinishClose();
                 }
             }
-            catch (ObjectDisposedException)
+            catch(Exception)
             {
                 // timer is already disposed,
                 // e.g. due to shutdown
