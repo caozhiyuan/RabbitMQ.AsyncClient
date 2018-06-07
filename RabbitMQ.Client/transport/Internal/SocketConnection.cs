@@ -23,8 +23,6 @@ namespace RabbitMQ.Client.Transport.Internal
         private readonly SocketReceiver _receiver;
         private readonly SocketSender _sender;
         private readonly CancellationTokenSource _connectionClosedTokenSource = new CancellationTokenSource();
-        private readonly Pipe _pipe;
-
         private readonly object _shutdownLock = new object();
         private volatile bool _aborted;
         private long _totalBytesWritten;
@@ -32,8 +30,7 @@ namespace RabbitMQ.Client.Transport.Internal
         internal SocketConnection(Socket socket)
         {
             Debug.Assert(socket != null);
-
-            _pipe = new Pipe();
+            
             _socket = socket;
             _trace = new EmptySocketsTrace();
 
