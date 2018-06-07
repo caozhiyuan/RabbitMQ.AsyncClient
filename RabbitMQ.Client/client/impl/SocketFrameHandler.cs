@@ -42,15 +42,14 @@
 using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Util;
 using System;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 using System.Threading;
-using RabbitMQ.Client.util;
+using System.Threading.Tasks;
+using RabbitMQ.Client.Transport.Internal;
 
 namespace RabbitMQ.Client.Impl
 {
@@ -69,18 +68,18 @@ namespace RabbitMQ.Client.Impl
 
     public class SocketFrameHandler : IFrameHandler
     {
-        private ITcpClient m_socket;
+        private SocketConnection socketConnection;
         private Stream m_netstream;
         private readonly object _semaphore = new object();
         private bool _closed;
-        private readonly Func<AddressFamily, ITcpClient> m_socketFactory;
+        private readonly Func<AddressFamily, Socket> m_socketFactory;
+        private readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
         private readonly int m_connectionTimeout;
         private readonly int m_readTimeout;
         private readonly int m_writeTimeout;
-        private readonly AsyncQueue<TaskCompletionSource<int>> queue = new AsyncQueue<TaskCompletionSource<int>>();
 
         public SocketFrameHandler(AmqpTcpEndpoint endpoint,
-            Func<AddressFamily, ITcpClient> socketFactory,
+            Func<AddressFamily, Socket> socketFactory,
             int connectionTimeout, 
             int readTimeout, 
             int writeTimeout)
@@ -91,29 +90,10 @@ namespace RabbitMQ.Client.Impl
             this.m_readTimeout = readTimeout;
             this.m_writeTimeout = writeTimeout;
         }
-        private async Task Loop()
-        {
-            while (!queue.Cleared)
-            {
-                var tsc = await queue.DequeueAsync(TimeSpan.FromMinutes(1));
-                if (tsc != null)
-                {
-                    try
-                    {
-                        var buffer = (byte[])tsc.Task.AsyncState;
-                        await m_netstream.WriteAsync(buffer, 0, buffer.Length);
-                    }
-                    catch (Exception e)
-                    {
-                        tsc.SetException(e);
-                    }
-                    tsc.SetResult(1);
-                }
-            }
-        }
 
         public async Task Connect()
         {
+            Socket m_socket = null;
             var endpoint = this.Endpoint;
             if (ShouldTryIPv6(endpoint))
             {
@@ -132,10 +112,13 @@ namespace RabbitMQ.Client.Impl
                 m_socket = await ConnectUsingIPv4(endpoint, m_socketFactory, m_connectionTimeout);
             }
 
-            Stream netstream = m_socket.GetStream();
-            netstream.ReadTimeout = m_readTimeout;
-            netstream.WriteTimeout = m_writeTimeout;
+            socketConnection = new SocketConnection(m_socket)
+            {
+                ReceiveTimeout = m_readTimeout,
+                SendTimeout = m_writeTimeout
+            };
 
+            Stream netstream = new RawStream(socketConnection.Transport.Input, socketConnection.Transport.Output);
             if (endpoint.Ssl.Enabled)
             {
                 try
@@ -151,29 +134,29 @@ namespace RabbitMQ.Client.Impl
 
             m_netstream = netstream;
 
-            _ = Loop();
+            _ = socketConnection.StartAsync();
         }
 
         public AmqpTcpEndpoint Endpoint { get; set; }
 
         public EndPoint LocalEndPoint
         {
-            get { return m_socket.Client.LocalEndPoint; }
+            get { return new IPEndPoint(socketConnection.LocalAddress, socketConnection.LocalPort); }
         }
 
         public int LocalPort
         {
-            get { return ((IPEndPoint)LocalEndPoint).Port; }
+            get { return socketConnection.LocalPort; }
         }
 
         public EndPoint RemoteEndPoint
         {
-            get { return m_socket.Client.RemoteEndPoint; }
+            get { return new IPEndPoint(socketConnection.RemoteAddress, socketConnection.RemotePort); }
         }
 
         public int RemotePort
         {
-            get { return ((IPEndPoint)LocalEndPoint).Port; }
+            get { return socketConnection.RemotePort; }
         }
 
         public int ReadTimeout
@@ -182,9 +165,9 @@ namespace RabbitMQ.Client.Impl
             {
                 try
                 {
-                    if (m_socket.Connected)
+                    if (socketConnection.Connected)
                     {
-                        m_socket.ReceiveTimeout = value;
+                        socketConnection.ReceiveTimeout = value;
                     }
                 }
                 catch (SocketException)
@@ -198,7 +181,7 @@ namespace RabbitMQ.Client.Impl
         {
             set
             {
-                m_socket.Client.SendTimeout = value;
+                socketConnection.SendTimeout = value;
             }
         }
 
@@ -210,8 +193,7 @@ namespace RabbitMQ.Client.Impl
                 {
                     try
                     {
-                        queue.Clear();
-                        m_socket.Close();
+                        socketConnection.Abort();
                     }
                     catch (Exception)
                     {
@@ -280,11 +262,17 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        private Task WriteFrameBuffer(byte[] buffer)
+        private async Task WriteFrameBuffer(byte[] buffer)
         {
-            var tsc = new TaskCompletionSource<int>(buffer);
-            queue.Enqueue(tsc);
-            return tsc.Task;
+            await semaphoreSlim.WaitAsync();
+            try
+            {
+                await m_netstream.WriteAsync(new ReadOnlyMemory<byte>(buffer));
+            }
+            finally
+            {
+                semaphoreSlim.Release();
+            }
         }
 
         private bool ShouldTryIPv6(AmqpTcpEndpoint endpoint)
@@ -292,25 +280,25 @@ namespace RabbitMQ.Client.Impl
             return (Socket.OSSupportsIPv6 && endpoint.AddressFamily != AddressFamily.InterNetwork);
         }
 
-        private Task<ITcpClient> ConnectUsingIPv6(AmqpTcpEndpoint endpoint,
-                                            Func<AddressFamily, ITcpClient> socketFactory,
+        private Task<Socket> ConnectUsingIPv6(AmqpTcpEndpoint endpoint,
+                                            Func<AddressFamily, Socket> socketFactory,
                                             int timeout)
         {
             return ConnectUsingAddressFamily(endpoint, socketFactory, timeout, AddressFamily.InterNetworkV6);
         }
 
-        private Task<ITcpClient> ConnectUsingIPv4(AmqpTcpEndpoint endpoint,
-                                            Func<AddressFamily, ITcpClient> socketFactory,
+        private Task<Socket> ConnectUsingIPv4(AmqpTcpEndpoint endpoint,
+                                            Func<AddressFamily, Socket> socketFactory,
                                             int timeout)
         {
             return ConnectUsingAddressFamily(endpoint, socketFactory, timeout, AddressFamily.InterNetwork);
         }
 
-        private async Task<ITcpClient> ConnectUsingAddressFamily(AmqpTcpEndpoint endpoint,
-                                                    Func<AddressFamily, ITcpClient> socketFactory,
+        private async Task<Socket> ConnectUsingAddressFamily(AmqpTcpEndpoint endpoint,
+                                                    Func<AddressFamily, Socket> socketFactory,
                                                     int timeout, AddressFamily family)
         {
-            ITcpClient socket = socketFactory(family);
+            Socket socket = socketFactory(family);
             try {
                 await ConnectOrFail(socket, endpoint, timeout);
                 return socket;
@@ -320,7 +308,7 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        private async Task ConnectOrFail(ITcpClient socket, AmqpTcpEndpoint endpoint, int timeout)
+        private async Task ConnectOrFail(Socket socket, AmqpTcpEndpoint endpoint, int timeout)
         {
             try
             {

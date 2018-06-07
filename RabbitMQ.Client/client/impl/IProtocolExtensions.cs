@@ -39,16 +39,8 @@
 //---------------------------------------------------------------------------
 
 using System;
-using System.Collections.Generic;
-
-#if !NETFX_CORE
 using System.Net.Sockets;
-#else
-using Windows.Networking.Sockets;
-#endif
-
 using RabbitMQ.Client.Impl;
-using RabbitMQ.Util;
 
 namespace RabbitMQ.Client.Framing.Impl
 {
@@ -57,11 +49,7 @@ namespace RabbitMQ.Client.Framing.Impl
         public static IFrameHandler CreateFrameHandler(
             this IProtocol protocol,
             AmqpTcpEndpoint endpoint,
-#if !NETFX_CORE
-            Func<AddressFamily, ITcpClient> socketFactory,
-#else
-            Func<StreamSocket> socketFactory,
-#endif
+            Func<AddressFamily, Socket> socketFactory,
             int connectionTimeout,
             int readTimeout,
             int writeTimeout)
