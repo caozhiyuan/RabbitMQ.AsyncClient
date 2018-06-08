@@ -152,67 +152,36 @@ namespace RabbitMQ.Client.Impl
 
     public class InboundFrame : Frame
     {
+
+        private static readonly byte[] EmptyBuffer = new byte[7];
+
         private InboundFrame(FrameType type, int channel, byte[] payload) : base(type, channel, payload)
         {
         }
 
-        private static void ProcessProtocolHeader(NetworkBinaryReader reader)
-        {
-            byte b1 = reader.ReadByte();
-            byte b2 = reader.ReadByte();
-            byte b3 = reader.ReadByte();
-            if (b1 != 'M' || b2 != 'Q' || b3 != 'P')
-            {
-                throw new MalformedFrameException("Invalid AMQP protocol header from server");
-            }
-
-            int transportHigh = reader.ReadByte();
-            int transportLow = reader.ReadByte();
-            int serverMajor = reader.ReadByte();
-            int serverMinor = reader.ReadByte();
-            throw new PacketNotRecognizedException(transportHigh,
-                transportLow,
-                serverMajor,
-                serverMinor);
-        }
-
         public static async Task<InboundFrame> ReadFrom(Stream reader)
         {
-            byte[] typebuffer = new byte[1];
-            await ReadAsync(reader, typebuffer);
-
-            int type = typebuffer[0];
+            var buffer = EmptyBuffer;
+            await ReadAsync(reader, buffer);
 
             NetworkBinaryReader headerReader = null;
+            int type = buffer[0];
             try
             {
                 if (type == 'A')
                 {
-                    byte[] readerbuffer = new byte[7];
-                    await ReadAsync(reader, readerbuffer); 
-
-                    headerReader = new NetworkBinaryReader(new MemoryStream(readerbuffer));
-                    // Probably an AMQP protocol header, otherwise meaningless
-                    ProcessProtocolHeader(headerReader);
+                    throw new MalformedFrameException("Invalid AMQP protocol header from server");
                 }
 
-                byte[] headerbuffer = new byte[6];
-                await ReadAsync(reader, headerbuffer);
-
-                headerReader = new NetworkBinaryReader(new MemoryStream(headerbuffer));
+                var headerReaderBuffer = new byte[6];
+                Array.Copy(buffer, 1, headerReaderBuffer, 0, 6);
+                headerReader = new NetworkBinaryReader(new MemoryStream(headerReaderBuffer));
 
                 int channel = headerReader.ReadUInt16();
                 int payloadSize = headerReader.ReadInt32(); // FIXME - throw exn on unreasonable value
 
                 byte[] payload = new byte[payloadSize];
                 await ReadAsync(reader, payload);
-                if (payload.Length != payloadSize)
-                {
-                    // Early EOF.
-                    throw new MalformedFrameException("Short frame - expected " +
-                                                      payloadSize + " bytes, got " +
-                                                      payload.Length + " bytes");
-                }
 
                 var frameEndMarkerbuffer = new byte[1];
                 await ReadAsync(reader, frameEndMarkerbuffer);
