@@ -109,15 +109,9 @@ namespace RabbitMQ.Client.Framing.Impl
         private Timer _heartbeatReadTimer;
         private AsyncAutoResetEvent m_heartbeatRead = new AsyncAutoResetEvent(false);
 
-#if CORECLR
         private static string version = typeof(Connection).GetTypeInfo().Assembly
-                                                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                                                .InformationalVersion;
-#else
-        private static string version = typeof(Connection).Assembly
-                                            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                                            .InformationalVersion;
-#endif
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            .InformationalVersion;
 
         // true if we haven't finished connection negotiation.
         // In this state socket exceptions are treated as fatal connection
