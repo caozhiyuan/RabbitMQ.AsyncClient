@@ -18,7 +18,7 @@ namespace RabbitMQ.Client.Transport.Internal
         private static readonly int MinAllocBufferSize = 2048;
 
         private readonly Socket _socket;
-        private static readonly PipeScheduler Scheduler = new IOQueue();
+        private static readonly PipeScheduler Scheduler = PipeScheduler.ThreadPool;
         private readonly ISocketsTrace _trace;
         private readonly SocketReceiver _receiver;
         private readonly SocketSender _sender;
