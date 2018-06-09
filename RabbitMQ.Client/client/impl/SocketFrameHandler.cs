@@ -195,7 +195,6 @@ namespace RabbitMQ.Client.Impl
                 {
                     try
                     {
-                        _emptyBuffer = null;
                         socketConnection.Abort();
                     }
                     catch (Exception)
@@ -205,6 +204,8 @@ namespace RabbitMQ.Client.Impl
                     finally
                     {
                         _closed = true;
+
+                        _emptyBuffer = null;
                     }
                 }
             }
