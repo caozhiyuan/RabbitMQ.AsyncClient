@@ -49,6 +49,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using RabbitMQ.Client.Framing;
 using RabbitMQ.Client.Transport.Internal;
 
 namespace RabbitMQ.Client.Impl
@@ -77,6 +78,7 @@ namespace RabbitMQ.Client.Impl
         private readonly int m_connectionTimeout;
         private readonly int m_readTimeout;
         private readonly int m_writeTimeout;
+        private byte[] _emptyBuffer = new byte[7];
 
         public SocketFrameHandler(AmqpTcpEndpoint endpoint,
             Func<AddressFamily, Socket> socketFactory,
@@ -93,26 +95,26 @@ namespace RabbitMQ.Client.Impl
 
         public async Task Connect()
         {
-            Socket m_socket = null;
+            Socket mSocket = null;
             var endpoint = this.Endpoint;
             if (ShouldTryIPv6(endpoint))
             {
                 try
                 {
-                    m_socket = await ConnectUsingIPv6(endpoint, m_socketFactory, m_connectionTimeout);
+                    mSocket = await ConnectUsingIPv6(endpoint, m_socketFactory, m_connectionTimeout);
                 }
                 catch (ConnectFailureException)
                 {
-                    m_socket = null;
+                    mSocket = null;
                 }
             }
 
-            if (m_socket == null && endpoint.AddressFamily != AddressFamily.InterNetworkV6)
+            if (mSocket == null && endpoint.AddressFamily != AddressFamily.InterNetworkV6)
             {
-                m_socket = await ConnectUsingIPv4(endpoint, m_socketFactory, m_connectionTimeout);
+                mSocket = await ConnectUsingIPv4(endpoint, m_socketFactory, m_connectionTimeout);
             }
 
-            socketConnection = new SocketConnection(m_socket)
+            socketConnection = new SocketConnection(mSocket)
             {
                 ReceiveTimeout = m_readTimeout,
                 SendTimeout = m_writeTimeout
@@ -193,6 +195,7 @@ namespace RabbitMQ.Client.Impl
                 {
                     try
                     {
+                        _emptyBuffer = null;
                         socketConnection.Abort();
                     }
                     catch (Exception)
@@ -209,17 +212,72 @@ namespace RabbitMQ.Client.Impl
 
         public Task<InboundFrame> ReadFrame()
         {
-            return InboundFrame.ReadFrom(m_netstream);
+            return ReadFrom(m_netstream);
         }
 
-        private static readonly byte[] amqp = Encoding.ASCII.GetBytes("AMQP");
+        private async Task<InboundFrame> ReadFrom(Stream reader)
+        {
+            var buffer = _emptyBuffer;
+            await ReadAsync(reader, buffer);
+
+            NetworkBinaryReader headerReader = null;
+            int type = buffer[0];
+            try
+            {
+                if (type == 'A')
+                {
+                    throw new MalformedFrameException("Invalid AMQP protocol header from server");
+                }
+
+                var headerReaderBuffer = new byte[6];
+                Array.Copy(buffer, 1, headerReaderBuffer, 0, 6);
+                headerReader = new NetworkBinaryReader(new MemoryStream(headerReaderBuffer));
+
+                int channel = headerReader.ReadUInt16();
+                int payloadSize = headerReader.ReadInt32(); // FIXME - throw exn on unreasonable value
+
+                byte[] payload = new byte[payloadSize];
+                await ReadAsync(reader, payload);
+
+                var frameEndMarkerbuffer = new byte[1];
+                await ReadAsync(reader, frameEndMarkerbuffer);
+                int frameEndMarker = frameEndMarkerbuffer[0];
+                if (frameEndMarker != Constants.FrameEnd)
+                {
+                    throw new MalformedFrameException("Bad frame end marker: " + frameEndMarker);
+                }
+
+                return new InboundFrame((FrameType)type, channel, payload);
+            }
+            finally
+            {
+                headerReader?.Dispose();
+            }
+        }
+
+        private static async Task ReadAsync(Stream reader, byte[] byteBuffer)
+        {
+            int size = byteBuffer.Length;
+            int index = 0;
+            while (index < size)
+            {
+                int read = await reader.ReadAsync(byteBuffer, index, size - index);
+                if (read == 0)
+                {
+                    throw new SocketException((int)SocketError.ConnectionReset);
+                }
+                index += read;
+            }
+        }
+
+        private static readonly byte[] Amqp = Encoding.ASCII.GetBytes("AMQP");
 
         public Task SendHeader()
         {
             using (var ms = new MemoryStream())
             {
                 var nbw = new NetworkBinaryWriter(ms);
-                nbw.Write(amqp);
+                nbw.Write(Amqp);
                 byte one = (byte)1;
                 if (Endpoint.Protocol.Revision != 0)
                 {

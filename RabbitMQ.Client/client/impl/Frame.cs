@@ -152,66 +152,9 @@ namespace RabbitMQ.Client.Impl
 
     public class InboundFrame : Frame
     {
-
-        private static readonly byte[] EmptyBuffer = new byte[7];
-
-        private InboundFrame(FrameType type, int channel, byte[] payload) : base(type, channel, payload)
+        public InboundFrame(FrameType type, int channel, byte[] payload) : base(type, channel, payload)
         {
-        }
 
-        public static async Task<InboundFrame> ReadFrom(Stream reader)
-        {
-            var buffer = EmptyBuffer;
-            await ReadAsync(reader, buffer);
-
-            NetworkBinaryReader headerReader = null;
-            int type = buffer[0];
-            try
-            {
-                if (type == 'A')
-                {
-                    throw new MalformedFrameException("Invalid AMQP protocol header from server");
-                }
-
-                var headerReaderBuffer = new byte[6];
-                Array.Copy(buffer, 1, headerReaderBuffer, 0, 6);
-                headerReader = new NetworkBinaryReader(new MemoryStream(headerReaderBuffer));
-
-                int channel = headerReader.ReadUInt16();
-                int payloadSize = headerReader.ReadInt32(); // FIXME - throw exn on unreasonable value
-
-                byte[] payload = new byte[payloadSize];
-                await ReadAsync(reader, payload);
-
-                var frameEndMarkerbuffer = new byte[1];
-                await ReadAsync(reader, frameEndMarkerbuffer);
-                int frameEndMarker = frameEndMarkerbuffer[0];
-                if (frameEndMarker != Constants.FrameEnd)
-                {
-                    throw new MalformedFrameException("Bad frame end marker: " + frameEndMarker);
-                }
-
-                return new InboundFrame((FrameType)type, channel, payload);
-            }
-            finally
-            {
-                headerReader?.Dispose();
-            }      
-        }
-
-        private static async Task ReadAsync(Stream reader, byte[] byteBuffer)
-        {
-            int size = byteBuffer.Length;
-            int index = 0;
-            while (index < size)
-            {
-                int read = await reader.ReadAsync(byteBuffer, index, size - index);
-                if (read == 0)
-                {
-                    throw new SocketException((int)SocketError.ConnectionReset);
-                }
-                index += read;
-            }
         }
 
         public NetworkBinaryReader GetReader()
