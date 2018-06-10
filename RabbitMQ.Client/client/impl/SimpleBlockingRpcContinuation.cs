@@ -108,7 +108,7 @@ namespace RabbitMQ.Client.Impl
 
         public virtual void HandleModelShutdown(ShutdownEventArgs reason)
         {
-            m_cell.SetResult(Either.Left(Either.Right(reason)));
+            m_cell.SetResult(Either.Right(reason));
         }
     }
 }

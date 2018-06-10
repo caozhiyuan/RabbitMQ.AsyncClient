@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Framing;
 
 namespace RabbitMQ.Client.Test
 {
@@ -25,7 +27,7 @@ namespace RabbitMQ.Client.Test
 
         private static async Task AsyncTest()
         {
-            var  factory = new ConnectionFactory
+            var factory = new ConnectionFactory
             {
                 UserName = "shampoo",
                 Password = "123456",
@@ -98,6 +100,76 @@ namespace RabbitMQ.Client.Test
                     });
                     k.Wait();
                     Console.WriteLine("mqtest " + sw.ElapsedMilliseconds);
+                }
+            }
+            finally
+            {
+                try
+                {
+                    await consumconn.Dispose();
+                }
+                finally
+                {
+                    await conn.Dispose();
+                }
+            }
+        }
+
+        private static async Task DelayTest()
+        {
+            var factory = new ConnectionFactory
+            {
+                UserName = "shampoo",
+                Password = "123456",
+                VirtualHost = "/",
+                HostName = "10.1.62.66",
+                DispatchConsumersAsync = true
+            };
+
+            var conn = await factory.CreateConnection();
+            var consumconn = await factory.CreateConnection();
+
+            try
+            {
+                IModel channel = await conn.CreateModel();
+
+                IModel consumchannel = await consumconn.CreateModel();
+                await consumchannel.ExchangeDeclare("asynctest", "topic");
+                await consumchannel.QueueDeclare("asynctest", true, false, false, null);
+                await consumchannel.QueueBind("asynctest", "asynctest", "asynctest", null);
+
+                await consumchannel.ExchangeDeclare("asynctest_delay", "topic");
+                var dic = new Dictionary<string, object>
+                {
+                    {"x-dead-letter-exchange", "asynctest"},
+                    {"x-dead-letter-routing-key", "asynctest"}
+                };
+                await consumchannel.QueueDeclare("asynctest_delay", true, false, false, dic);
+                await consumchannel.QueueBind("asynctest_delay", "asynctest_delay", "asynctest_delay", null);
+
+                await consumchannel.BasicQos(0, 100, false);
+                AsyncEventingBasicConsumer consumer = new AsyncEventingBasicConsumer(consumchannel);
+                consumer.Received += async (ch, ea) =>
+                {
+                    Console.WriteLine($" {DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff")} {Encoding.UTF8.GetString(ea.Body)}");
+                    await consumchannel.BasicAck(ea.DeliveryTag, false);
+                };
+                var consumerTag = await consumchannel.BasicConsume("asynctest", false, consumer);
+                Console.WriteLine($"consumerTag {consumerTag}");
+
+                int id = 0;
+                while (true)
+                {
+                    var messageBodyBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new Test()
+                    {
+                        Id = Interlocked.Increment(ref id),
+                        Name = "Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /Queue asynctest in virtual host /"
+                    }));
+                    await channel.BasicPublish("asynctest_delay", "asynctest_delay", true, new BasicProperties()
+                    {
+                        Expiration = "10000"
+                    }, messageBodyBytes);
+                    Console.ReadLine();
                 }
             }
             finally
