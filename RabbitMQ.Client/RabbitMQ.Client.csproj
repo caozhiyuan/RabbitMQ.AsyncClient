@@ -6,7 +6,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Version>1.0.0</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <PackageId>RabbitMQ.AsyncClient</PackageId>
     <Description>RabbitMQ Async Client</Description>
     <PackageTags>RabbitMQ;TCP</PackageTags>
