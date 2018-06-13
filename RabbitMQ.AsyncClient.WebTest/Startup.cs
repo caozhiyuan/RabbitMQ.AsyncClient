@@ -39,7 +39,7 @@ namespace RabbitMQ.AsyncClient.WebTest
         private IModel m_channel;
         private readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
 
-        private async Task<IModel> GetMqChannelAsync()
+        private async ValueTask<IModel> GetMqChannelAsync()
         {
             if (m_channel != null)
             {
