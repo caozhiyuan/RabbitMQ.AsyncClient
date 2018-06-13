@@ -1,9 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFrameworks>netcoreapp2.1;netstandard2.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>1.0.0</Version>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <PackageId>RabbitMQ.AsyncClient</PackageId>
+    <Description>RabbitMQ Async Client</Description>
+    <PackageTags>RabbitMQ;TCP</PackageTags>
+    <Authors>caozhiyuan</Authors>
+    <PackageProjectUrl>https://github.com/caozhiyuan/RabbitMQ.AsyncClient</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

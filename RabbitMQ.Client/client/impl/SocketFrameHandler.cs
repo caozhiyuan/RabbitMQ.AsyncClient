@@ -326,7 +326,11 @@ namespace RabbitMQ.Client.Impl
             await semaphoreSlim.WaitAsync();
             try
             {
+#if NETCOREAPP2_1
                 await m_netstream.WriteAsync(new ReadOnlyMemory<byte>(buffer));
+#else
+                await m_netstream.WriteAsync(buffer, 0, buffer.Length);
+#endif
             }
             finally
             {
