@@ -9,16 +9,17 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using RabbitMQ.Client.transport.Internal;
 
 namespace RabbitMQ.Client.Transport.Internal
 {
 
     internal sealed class SocketConnection
     {
-        private static readonly int MinAllocBufferSize = 2048;
+        private static readonly MultiIOQueueGroup MultiIOQueueGroup = new MultiIOQueueGroup();
 
+        private static readonly int MinAllocBufferSize = 2048;
         private readonly Socket _socket;
-        private static readonly PipeScheduler Scheduler = PipeScheduler.ThreadPool;
         private readonly ISocketsTrace _trace;
         private readonly SocketReceiver _receiver;
         private readonly SocketSender _sender;
@@ -50,8 +51,9 @@ namespace RabbitMQ.Client.Transport.Internal
             Transport = pair.Transport;          
             Application = pair.Application;
 
-            _receiver = new SocketReceiver(_socket, Scheduler);
-            _sender = new SocketSender(_socket, Scheduler);
+            PipeScheduler scheduler = MultiIOQueueGroup.GetIOQueue();
+            _receiver = new SocketReceiver(_socket, scheduler);
+            _sender = new SocketSender(_socket, scheduler);
         }
 
 
