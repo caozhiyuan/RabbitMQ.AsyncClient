@@ -29,10 +29,10 @@ namespace RabbitMQ.Client.Test
         {
             var factory = new ConnectionFactory
             {
-                UserName = "shampoo",
+                UserName = "admin",
                 Password = "123456",
                 VirtualHost = "/",
-                HostName = "10.1.62.66",
+                HostName = "127.0.0.1",
                 DispatchConsumersAsync = true
             };
 
@@ -119,10 +119,10 @@ namespace RabbitMQ.Client.Test
         {
             var factory = new ConnectionFactory
             {
-                UserName = "shampoo",
+                UserName = "admin",
                 Password = "123456",
                 VirtualHost = "/",
-                HostName = "10.1.62.66",
+                HostName = "127.0.0.1",
                 DispatchConsumersAsync = true
             };
 
