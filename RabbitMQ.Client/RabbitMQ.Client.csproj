@@ -4,7 +4,7 @@
     <TargetFrameworks>netcoreapp2.1;netstandard2.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>RabbitMQ.AsyncClient</PackageId>
     <Description>RabbitMQ Async Client</Description>
@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.IO.Pipelines" Version="4.5.2" />
+    <PackageReference Include="Pipelines.Sockets.Unofficial" Version="1.0.7" />
   </ItemGroup>
 
 </Project>
