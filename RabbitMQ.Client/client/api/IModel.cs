@@ -495,7 +495,7 @@ namespace RabbitMQ.Client
         /// throws an exception when called on a non-Confirm channel.
         /// </remarks>
         [AmqpMethodDoNotImplement(null)]
-        bool WaitForConfirms();
+        Task<bool> WaitForConfirms();
 
         /// <summary>
         /// Wait until all published messages have been confirmed.
@@ -511,7 +511,7 @@ namespace RabbitMQ.Client
         /// throws an exception when called on a non-Confirm channel.
         /// </remarks>
         [AmqpMethodDoNotImplement(null)]
-        bool WaitForConfirms(TimeSpan timeout);
+        Task<bool> WaitForConfirms(TimeSpan timeout);
 
         /// <summary>
         /// Wait until all published messages have been confirmed.
@@ -530,7 +530,7 @@ namespace RabbitMQ.Client
         /// throws an exception when called on a non-Confirm channel.
         /// </remarks>
         [AmqpMethodDoNotImplement(null)]
-        bool WaitForConfirms(TimeSpan timeout, out bool timedOut);
+        Task<Tuple<bool, bool>> WaitForConfirms0(TimeSpan timeout);
 
         /// <summary>
         /// Wait until all published messages have been confirmed.

@@ -1085,17 +1085,17 @@ namespace RabbitMQ.Client.Impl
             return m_delegate.TxSelect();
         }
 
-        public bool WaitForConfirms(TimeSpan timeout, out bool timedOut)
+        public Task<Tuple<bool, bool>> WaitForConfirms0(TimeSpan timeout)
         {
-            return m_delegate.WaitForConfirms(timeout, out timedOut);
+            return m_delegate.WaitForConfirms0(timeout);
         }
 
-        public bool WaitForConfirms(TimeSpan timeout)
+        public Task<bool> WaitForConfirms(TimeSpan timeout)
         {
             return m_delegate.WaitForConfirms(timeout);
         }
 
-        public bool WaitForConfirms()
+        public Task<bool> WaitForConfirms()
         {
             return m_delegate.WaitForConfirms();
         }

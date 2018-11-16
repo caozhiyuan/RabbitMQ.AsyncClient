@@ -75,6 +75,7 @@ namespace RabbitMQ.Client.Impl
         private readonly object m_flowSendLock = new object();
         private readonly object m_shutdownLock = new object();
 
+        private TaskCompletionSource<object> m_confirm = new TaskCompletionSource<object>();
         private readonly SynchronizedList<ulong> m_unconfirmedSet = new SynchronizedList<ulong>();
 
         private AsyncEventHandler<BasicAckEventArgs> m_basicAck;
@@ -647,8 +648,7 @@ namespace RabbitMQ.Client.Impl
                     }
                 }
             }
-            lock (m_unconfirmedSet.SyncRoot)
-                Monitor.Pulse(m_unconfirmedSet.SyncRoot);
+            m_confirm.SetCanceled();
             m_flowControlBlock.Set();
         }
 
@@ -1433,58 +1433,56 @@ namespace RabbitMQ.Client.Impl
 
         public abstract Task TxSelect();
 
-        public bool WaitForConfirms(TimeSpan timeout, out bool timedOut)
+        public async Task<Tuple<bool,bool>> WaitForConfirms0(TimeSpan timeout)
         {
             if (NextPublishSeqNo == 0UL)
             {
                 throw new InvalidOperationException("Confirms not selected");
             }
-            bool isWaitInfinite = (timeout.TotalMilliseconds == Timeout.Infinite);
+            bool isWaitInfinite = (Math.Abs(timeout.TotalMilliseconds - Timeout.Infinite) < 0.00001);
             Stopwatch stopwatch = Stopwatch.StartNew();
-            lock (m_unconfirmedSet.SyncRoot)
+            while (true)
             {
-                while (true)
+                if (!IsOpen)
                 {
-                    if (!IsOpen)
-                    {
-                        throw new AlreadyClosedException(CloseReason);
-                    }
+                    throw new AlreadyClosedException(CloseReason);
+                }
 
+                lock (m_unconfirmedSet)
+                {
                     if (m_unconfirmedSet.Count == 0)
                     {
                         bool aux = m_onlyAcksReceived;
                         m_onlyAcksReceived = true;
-                        timedOut = false;
-                        return aux;
+                        return Tuple.Create(aux, false);
                     }
-                    if (isWaitInfinite)
+                }
+
+                if (isWaitInfinite)
+                {
+                    await m_confirm.Task;
+                }
+                else
+                {
+                    TimeSpan elapsed = stopwatch.Elapsed;
+                    if (elapsed > timeout || (await Task.WhenAny(Task.Delay(timeout - elapsed), m_confirm.Task) != m_confirm.Task))
                     {
-                        Monitor.Wait(m_unconfirmedSet.SyncRoot);
-                    }
-                    else
-                    {
-                        TimeSpan elapsed = stopwatch.Elapsed;
-                        if (elapsed > timeout || !Monitor.Wait(
-                            m_unconfirmedSet.SyncRoot, timeout - elapsed))
-                        {
-                            timedOut = true;
-                            return true;
-                        }
+                        return Tuple.Create(true, true);
                     }
                 }
             }
         }
 
-        public bool WaitForConfirms()
+        public async Task<bool> WaitForConfirms()
         {
-            bool timedOut;
-            return WaitForConfirms(TimeSpan.FromMilliseconds(Timeout.Infinite), out timedOut);
+            var tuple = await WaitForConfirms0(TimeSpan.FromMilliseconds(Timeout.Infinite));
+            return tuple.Item2;
         }
 
-        public bool WaitForConfirms(TimeSpan timeout)
+        public async Task<bool> WaitForConfirms(TimeSpan timeout)
         {
-            bool timedOut;
-            return WaitForConfirms(timeout, out timedOut);
+            var tuple = await WaitForConfirms0(timeout);
+            return tuple.Item2;
         }
 
         public Task WaitForConfirmsOrDie()
@@ -1494,8 +1492,9 @@ namespace RabbitMQ.Client.Impl
 
         public async Task WaitForConfirmsOrDie(TimeSpan timeout)
         {
-            bool timedOut;
-            bool onlyAcksReceived = WaitForConfirms(timeout, out timedOut);
+            var tuple = await WaitForConfirms0(timeout);
+            bool timedOut = tuple.Item2;
+            bool onlyAcksReceived = tuple.Item1;
             if (!onlyAcksReceived)
             {
                 await Close(new ShutdownEventArgs(ShutdownInitiator.Application,
@@ -1545,7 +1544,8 @@ namespace RabbitMQ.Client.Impl
                 m_onlyAcksReceived = m_onlyAcksReceived && !isNack;
                 if (m_unconfirmedSet.Count == 0)
                 {
-                    Monitor.Pulse(m_unconfirmedSet.SyncRoot);
+                    m_confirm.TrySetResult(1);
+                    m_confirm = new TaskCompletionSource<object>();
                 }
             }
         }

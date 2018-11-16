@@ -169,6 +169,7 @@ namespace RabbitMQ.Client.Test
                     {
                         Expiration = "10000"
                     }, messageBodyBytes);
+
                     Console.ReadLine();
                 }
             }
