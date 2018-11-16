@@ -75,7 +75,7 @@ namespace RabbitMQ.Client.Impl
         private readonly object m_flowSendLock = new object();
         private readonly object m_shutdownLock = new object();
 
-        private TaskCompletionSource<object> m_confirm = new TaskCompletionSource<object>();
+        private AsyncAutoResetEvent m_confirm = new AsyncAutoResetEvent(false);
         private readonly SynchronizedList<ulong> m_unconfirmedSet = new SynchronizedList<ulong>();
 
         private AsyncEventHandler<BasicAckEventArgs> m_basicAck;
@@ -648,7 +648,7 @@ namespace RabbitMQ.Client.Impl
                     }
                 }
             }
-            m_confirm.SetCanceled();
+            m_confirm.Set();
             m_flowControlBlock.Set();
         }
 
@@ -1460,12 +1460,12 @@ namespace RabbitMQ.Client.Impl
 
                 if (isWaitInfinite)
                 {
-                    await m_confirm.Task;
+                    await m_confirm.WaitAsync(timeout);
                 }
                 else
                 {
                     TimeSpan elapsed = stopwatch.Elapsed;
-                    if (elapsed > timeout || (await Task.WhenAny(Task.Delay(timeout - elapsed), m_confirm.Task) != m_confirm.Task))
+                    if (elapsed > timeout || !await m_confirm.WaitAsync(timeout))
                     {
                         return Tuple.Create(true, true);
                     }
@@ -1544,8 +1544,7 @@ namespace RabbitMQ.Client.Impl
                 m_onlyAcksReceived = m_onlyAcksReceived && !isNack;
                 if (m_unconfirmedSet.Count == 0)
                 {
-                    m_confirm.TrySetResult(1);
-                    m_confirm = new TaskCompletionSource<object>();
+                    m_confirm.Set();
                 }
             }
         }
