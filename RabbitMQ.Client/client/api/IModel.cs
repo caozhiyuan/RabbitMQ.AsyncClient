@@ -278,7 +278,7 @@ namespace RabbitMQ.Client
         /// Enable publisher acknowledgements.
         /// </summary>
         [AmqpMethodDoNotImplement(null)]
-        void ConfirmSelect();
+        Task ConfirmSelect();
 
         /// <summary>
         ///  Creates a BasicPublishBatch instance

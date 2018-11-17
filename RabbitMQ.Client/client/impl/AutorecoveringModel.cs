@@ -860,10 +860,10 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public void ConfirmSelect()
+        public Task ConfirmSelect()
         {
             usesPublisherConfirms = true;
-            m_delegate.ConfirmSelect();
+            return m_delegate.ConfirmSelect();
         }
 
         public IBasicProperties CreateBasicProperties()

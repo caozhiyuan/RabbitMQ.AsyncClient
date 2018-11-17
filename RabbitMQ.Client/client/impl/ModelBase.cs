@@ -1262,13 +1262,13 @@ namespace RabbitMQ.Client.Impl
             Close(replyCode, replyText, false);
         }
 
-        public void ConfirmSelect()
+        public Task ConfirmSelect()
         {
             if (NextPublishSeqNo == 0UL)
             {
                 NextPublishSeqNo = 1;
             }
-            _Private_ConfirmSelect(false);
+            return _Private_ConfirmSelect(false);
         }
 
         ///////////////////////////////////////////////////////////////////////////
