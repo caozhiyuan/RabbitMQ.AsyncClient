@@ -54,15 +54,13 @@ namespace RabbitMQ.Client.Impl
     ///<summary>Small ISession implementation used only for channel 0.</summary>
     public class MainSession : Session
     {
-        private readonly object _closingLock = new object();
-
         public int m_closeClassId;
         public int m_closeMethodId;
         public int m_closeOkClassId;
         public int m_closeOkMethodId;
 
-        public bool m_closeServerInitiated;
-        public bool m_closing;
+        public volatile bool m_closeServerInitiated;
+        public volatile bool m_closing;
 
         public MainSession(Connection connection) : base(connection, 0)
         {
@@ -74,14 +72,11 @@ namespace RabbitMQ.Client.Impl
 
         public Action Handler { get; set; }
 
-        public override Task HandleFrame(InboundFrame frame)
+        public override async Task HandleFrame(InboundFrame frame)
         {
-            lock (_closingLock)
+            if (!m_closing)
             {
-                if (!m_closing)
-                {
-                    return base.HandleFrame(frame);
-                }
+                await base.HandleFrame(frame);
             }
 
             if (!m_closeServerInitiated && (frame.IsMethod()))
@@ -90,7 +85,7 @@ namespace RabbitMQ.Client.Impl
                 if ((method.ProtocolClassId == m_closeClassId)
                     && (method.ProtocolMethodId == m_closeMethodId))
                 {
-                    return base.HandleFrame(frame);
+                    await base.HandleFrame(frame);
                 }
 
                 if ((method.ProtocolClassId == m_closeOkClassId)
@@ -101,8 +96,6 @@ namespace RabbitMQ.Client.Impl
                     Handler();
                 }
             }
-
-            return Task.CompletedTask;
 
             // Either a non-method frame, or not what we were looking
             // for. Ignore it - we're quiescing.
@@ -116,24 +109,18 @@ namespace RabbitMQ.Client.Impl
         ///</remarks>
         public void SetSessionClosing(bool closeServerInitiated)
         {
-            lock (_closingLock)
+            if (!m_closing)
             {
-                if (!m_closing)
-                {
-                    m_closing = true;
-                    m_closeServerInitiated = closeServerInitiated;
-                }
+                m_closing = true;
+                m_closeServerInitiated = closeServerInitiated;
             }
         }
 
-        public override Task Transmit(Command cmd)
+        public override async Task Transmit(Command cmd)
         {
-            lock (_closingLock)
+            if (!m_closing)
             {
-                if (!m_closing)
-                {
-                    return base.Transmit(cmd);
-                }
+                await base.Transmit(cmd);
             }
 
             // Allow always for sending close ok
@@ -146,9 +133,8 @@ namespace RabbitMQ.Client.Impl
                     (method.ProtocolMethodId == m_closeMethodId))
                     ))
             {
-                return base.Transmit(cmd);
+                await base.Transmit(cmd);
             }
-            return Task.CompletedTask;
         }
     }
 }

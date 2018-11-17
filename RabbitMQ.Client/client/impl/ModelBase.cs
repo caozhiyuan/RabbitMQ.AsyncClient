@@ -44,6 +44,7 @@ using RabbitMQ.Client.Framing;
 using RabbitMQ.Client.Framing.Impl;
 using RabbitMQ.Util;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -59,7 +60,7 @@ namespace RabbitMQ.Client.Impl
 {
     public abstract class ModelBase : IFullModel, IRecoverable
     {
-        public readonly IDictionary<string, IBasicConsumer> m_consumers = new Dictionary<string, IBasicConsumer>();
+        public readonly ConcurrentDictionary<string, IBasicConsumer> m_consumers = new ConcurrentDictionary<string, IBasicConsumer>();
 
         ///<summary>Only used to kick-start a connection open
         ///sequence. See <see cref="Connection.Open"/> </summary>
@@ -72,7 +73,6 @@ namespace RabbitMQ.Client.Impl
         private AsyncManualResetEvent m_flowControlBlock = new AsyncManualResetEvent(true);
 
         private readonly object m_eventLock = new object();
-        private readonly object m_flowSendLock = new object();
         private readonly object m_shutdownLock = new object();
 
         private AsyncAutoResetEvent m_confirm = new AsyncAutoResetEvent(false);
@@ -477,8 +477,9 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (AsyncEventHandler<BasicAckEventArgs> h in handler.GetInvocationList())
+                foreach (var @delegate in handler.GetInvocationList())
                 {
+                    var h = (AsyncEventHandler<BasicAckEventArgs>) @delegate;
                     try
                     {
                         await h(this, args);
@@ -502,8 +503,9 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (AsyncEventHandler<BasicNackEventArgs> h in handler.GetInvocationList())
+                foreach (var @delegate in handler.GetInvocationList())
                 {
+                    var h = (AsyncEventHandler<BasicNackEventArgs>) @delegate;
                     try
                     {
                         await h(this, args);
@@ -527,8 +529,9 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (AsyncEventHandler<EventArgs> h in handler.GetInvocationList())
+                foreach (var @delegate in handler.GetInvocationList())
                 {
+                    var h = (AsyncEventHandler<EventArgs>) @delegate;
                     try
                     {
                         await h(this, args);
@@ -550,8 +553,9 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (AsyncEventHandler<BasicReturnEventArgs> h in handler.GetInvocationList())
+                foreach (var @delegate in handler.GetInvocationList())
                 {
+                    var h = (AsyncEventHandler<BasicReturnEventArgs>) @delegate;
                     try
                     {
                         await h(this, args);
@@ -573,8 +577,9 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (AsyncEventHandler<CallbackExceptionEventArgs> h in handler.GetInvocationList())
+                foreach (var @delegate in handler.GetInvocationList())
                 {
+                    var h = (AsyncEventHandler<CallbackExceptionEventArgs>) @delegate;
                     try
                     {
                         await h(this, args);
@@ -599,8 +604,9 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (AsyncEventHandler<FlowControlEventArgs> h in handler.GetInvocationList())
+                foreach (var @delegate in handler.GetInvocationList())
                 {
+                    var h = (AsyncEventHandler<FlowControlEventArgs>) @delegate;
                     try
                     {
                         await h(this, args);
@@ -636,8 +642,9 @@ namespace RabbitMQ.Client.Impl
             }
             if (handler != null)
             {
-                foreach (AsyncEventHandler<ShutdownEventArgs> h in handler.GetInvocationList())
+                foreach (var @delegate in handler.GetInvocationList())
                 {
+                    var h = (AsyncEventHandler<ShutdownEventArgs>) @delegate;
                     try
                     {
                         await h(this, reason);
@@ -723,12 +730,8 @@ namespace RabbitMQ.Client.Impl
 
         public void HandleBasicCancel(string consumerTag, bool nowait)
         {
-            IBasicConsumer consumer;
-            lock (m_consumers)
-            {
-                consumer = m_consumers[consumerTag];
-                m_consumers.Remove(consumerTag);
-            }
+            var consumer = m_consumers[consumerTag];
+            m_consumers.TryRemove(consumerTag, out _);
             if (consumer == null)
             {
                 consumer = DefaultConsumer;
@@ -738,20 +741,10 @@ namespace RabbitMQ.Client.Impl
 
         public void HandleBasicCancelOk(string consumerTag)
         {
-            var k =
-                (BasicConsumerRpcContinuation)m_continuationQueue.Next();
-/*
-            Trace.Assert(k.m_consumerTag == consumerTag, string.Format(
-                "Consumer tag mismatch during cancel: {0} != {1}",
-                k.m_consumerTag,
-                consumerTag
-                ));
-*/
-            lock (m_consumers)
-            {
-                k.m_consumer = m_consumers[consumerTag];
-                m_consumers.Remove(consumerTag);
-            }
+            var k = (BasicConsumerRpcContinuation)m_continuationQueue.Next();
+
+            k.m_consumer = m_consumers[consumerTag];
+            m_consumers.TryRemove(consumerTag, out _);
             ConsumerDispatcher.HandleBasicCancelOk(k.m_consumer, consumerTag);
             k.HandleCommand(null); // release the continuation.
         }
@@ -777,11 +770,7 @@ namespace RabbitMQ.Client.Impl
             IBasicProperties basicProperties,
             byte[] body)
         {
-            IBasicConsumer consumer;
-            lock (m_consumers)
-            {
-                consumer = m_consumers[consumerTag];
-            }
+            var consumer = m_consumers[consumerTag];
             if (consumer == null)
             {
                 if (DefaultConsumer == null)
@@ -1145,10 +1134,7 @@ namespace RabbitMQ.Client.Impl
 
             await _Private_BasicCancel(consumerTag, false);
             await k.GetReply(this.ContinuationTimeout);
-            lock (m_consumers)
-            {
-                m_consumers.Remove(consumerTag);
-            }
+            m_consumers.TryRemove(consumerTag, out _);
 
             ModelShutdown -= k.m_consumer.HandleModelShutdown;
         }
