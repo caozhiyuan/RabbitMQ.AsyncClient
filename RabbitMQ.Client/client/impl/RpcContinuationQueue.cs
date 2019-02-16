@@ -39,6 +39,7 @@
 //---------------------------------------------------------------------------
 
 using System;
+using System.Collections.Concurrent;
 
 namespace RabbitMQ.Client.Impl
 {
@@ -53,8 +54,7 @@ namespace RabbitMQ.Client.Impl
     ///</remarks>
     public class RpcContinuationQueue
     {
-        public IRpcContinuation m_outstandingRpc = null;
-        private readonly object m_outstandingRpcLock = new object();
+        private readonly ConcurrentQueue<IRpcContinuation> m_outstandingRpc = new ConcurrentQueue<IRpcContinuation>();
 
         ///<summary>Enqueue a continuation, marking a pending RPC.</summary>
         ///<remarks>
@@ -70,14 +70,7 @@ namespace RabbitMQ.Client.Impl
         ///</remarks>
         public void Enqueue(IRpcContinuation k)
         {
-            lock (m_outstandingRpcLock)
-            {
-                if (m_outstandingRpc != null)
-                {
-                    throw new NotSupportedException("Pipelining of requests forbidden");
-                }
-                m_outstandingRpc = k;
-            }
+            m_outstandingRpc.Enqueue(k);
         }
 
         ///<summary>Interrupt all waiting continuations.</summary>
@@ -110,12 +103,8 @@ namespace RabbitMQ.Client.Impl
         ///</remarks>
         public IRpcContinuation Next()
         {
-            lock (m_outstandingRpcLock)
-            {
-                IRpcContinuation result = m_outstandingRpc;
-                m_outstandingRpc = null;
-                return result;
-            }
+            m_outstandingRpc.TryDequeue(out var result);
+            return result;
         }
     }
 }

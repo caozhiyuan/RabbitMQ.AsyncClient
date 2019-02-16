@@ -7,7 +7,7 @@ namespace RabbitMQ.Util
 {
     public class AsyncAutoResetEvent
     {
-        readonly static Task<bool> CompletedTrueTask = Task.FromResult(true);
+        static readonly Task<bool> CompletedTrueTask = Task.FromResult(true);
         readonly List<WaitTask> waiters;
         bool signaled;
 

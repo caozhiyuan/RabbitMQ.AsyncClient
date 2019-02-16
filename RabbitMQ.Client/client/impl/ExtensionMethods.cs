@@ -40,6 +40,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace RabbitMQ.Client.Impl
@@ -62,6 +63,12 @@ namespace RabbitMQ.Client.Impl
 
             var hashCode = Math.Abs(Guid.NewGuid().GetHashCode());
             return list.ElementAt<T>(hashCode % n);
+        }
+
+        internal static ArraySegment<byte> GetBufferSegment(this MemoryStream ms)
+        {
+            var buffer = ms.GetBuffer();
+            return new ArraySegment<byte>(buffer, 0, (int)ms.Position);
         }
     }
 }

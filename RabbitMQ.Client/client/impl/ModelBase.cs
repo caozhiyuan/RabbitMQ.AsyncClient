@@ -702,10 +702,10 @@ namespace RabbitMQ.Client.Impl
             return Session.ToString();
         }
 
-        public Task TransmitAndEnqueue(Command cmd, IRpcContinuation k)
+        public async Task TransmitAndEnqueue(Command cmd, IRpcContinuation k)
         {
             Enqueue(k);
-            return Session.Transmit(cmd);
+            await Session.Transmit(cmd);
         }
 
         public Task Dispose()

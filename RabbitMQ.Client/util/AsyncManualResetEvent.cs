@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Threading;
+﻿using System.Threading;
 using System.Threading.Tasks;
 
 namespace RabbitMQ.Client.util
@@ -10,14 +9,9 @@ namespace RabbitMQ.Client.util
     public sealed class AsyncManualResetEvent
     {
         /// <summary>
-        /// The object used for synchronization.
-        /// </summary>
-        private readonly object _mutex;
-
-        /// <summary>
         /// The current state of the event.
         /// </summary>
-        private TaskCompletionSource<object> _tcs;
+        private volatile TaskCompletionSource<object> _tcs;
 
         /// <summary>
         /// Creates an async-compatible manual-reset event.
@@ -25,7 +19,6 @@ namespace RabbitMQ.Client.util
         /// <param name="set">Whether the manual-reset event is initially set or unset.</param>
         public AsyncManualResetEvent(bool set)
         {
-            _mutex = new object();
             _tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             if (set)
                 _tcs.TrySetResult(null);
@@ -44,7 +37,7 @@ namespace RabbitMQ.Client.util
         /// </summary>
         public bool IsSet
         {
-            get { lock (_mutex) return _tcs.Task.IsCompleted; }
+            get { return _tcs.Task.IsCompleted; }
         }
 
         /// <summary>
@@ -52,10 +45,7 @@ namespace RabbitMQ.Client.util
         /// </summary>
         public Task WaitAsync()
         {
-            lock (_mutex)
-            {
-                return _tcs.Task;
-            }
+            return _tcs.Task;
         }
 
         /// <summary>
@@ -101,10 +91,7 @@ namespace RabbitMQ.Client.util
         /// </summary>
         public void Set()
         {
-            lock (_mutex)
-            {
-                _tcs.TrySetResult(null);
-            }
+            _tcs.TrySetResult(null);
         }
 
         /// <summary>
@@ -112,11 +99,8 @@ namespace RabbitMQ.Client.util
         /// </summary>
         public void Reset()
         {
-            lock (_mutex)
-            {
-                if (_tcs.Task.IsCompleted)
-                    _tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-            }
+            if (_tcs.Task.IsCompleted)
+                _tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
     }
 }

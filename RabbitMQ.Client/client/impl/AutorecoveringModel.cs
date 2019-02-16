@@ -1184,7 +1184,7 @@ namespace RabbitMQ.Client.Impl
 
             if (usesPublisherConfirms)
             {
-                ConfirmSelect();
+                await ConfirmSelect();
             }
 
             if (usesTransactions)

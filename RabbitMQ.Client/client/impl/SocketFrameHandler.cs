@@ -242,9 +242,9 @@ namespace RabbitMQ.Client.Impl
                 byte[] payload = new byte[payloadSize];
                 await ReadAsync(reader, payload);
 
-                var frameEndMarkerbuffer = new byte[1];
-                await ReadAsync(reader, frameEndMarkerbuffer);
-                int frameEndMarker = frameEndMarkerbuffer[0];
+                var frameEndMarkerBuffer = new byte[1];
+                await ReadAsync(reader, frameEndMarkerBuffer);
+                int frameEndMarker = frameEndMarkerBuffer[0];
                 if (frameEndMarker != Constants.FrameEnd)
                 {
                     throw new MalformedFrameException("Bad frame end marker: " + frameEndMarker);
@@ -275,64 +275,76 @@ namespace RabbitMQ.Client.Impl
 
         private static readonly byte[] Amqp = Encoding.ASCII.GetBytes("AMQP");
 
-        public Task SendHeader()
-        {
-            using (var ms = new MemoryStream())
-            {
-                var nbw = new NetworkBinaryWriter(ms);
-                nbw.Write(Amqp);
-                byte one = (byte)1;
-                if (Endpoint.Protocol.Revision != 0)
-                {
-                    nbw.Write((byte)0);
-                    nbw.Write((byte)Endpoint.Protocol.MajorVersion);
-                    nbw.Write((byte)Endpoint.Protocol.MinorVersion);
-                    nbw.Write((byte)Endpoint.Protocol.Revision);
-                }
-                else
-                {
-                    nbw.Write(one);
-                    nbw.Write(one);
-                    nbw.Write((byte)Endpoint.Protocol.MajorVersion);
-                    nbw.Write((byte)Endpoint.Protocol.MinorVersion);
-                }
-
-                return WriteFrameBuffer(ms.ToArray());
-            }
-        }
-
-        public Task WriteFrame(OutboundFrame frame)
-        {
-            using (var ms = new MemoryStream())
-            {
-                var nbw = new NetworkBinaryWriter(ms);
-                frame.WriteTo(nbw);
-
-                return WriteFrameBuffer(ms.ToArray());
-            }
-        }
-
-        public Task WriteFrameSet(IList<OutboundFrame> frames)
-        {
-            using (var ms = new MemoryStream())
-            {
-                var nbw = new NetworkBinaryWriter(ms);
-                foreach (var f in frames) f.WriteTo(nbw);
-
-                return WriteFrameBuffer(ms.ToArray());
-            }
-        }
-
-        private async Task WriteFrameBuffer(byte[] buffer)
+        public async Task SendHeader()
         {
             await semaphoreSlim.WaitAsync();
             try
             {
-#if NETCOREAPP2_1
-                await m_netstream.WriteAsync(new ReadOnlyMemory<byte>(buffer));
-#else
-                await m_netstream.WriteAsync(buffer, 0, buffer.Length);
-#endif
+                using (var ms = new MemoryStream())
+                {
+                    var nbw = new NetworkBinaryWriter(ms);
+                    nbw.Write(Amqp);
+                    byte one = (byte) 1;
+                    if (Endpoint.Protocol.Revision != 0)
+                    {
+                        nbw.Write((byte) 0);
+                        nbw.Write((byte) Endpoint.Protocol.MajorVersion);
+                        nbw.Write((byte) Endpoint.Protocol.MinorVersion);
+                        nbw.Write((byte) Endpoint.Protocol.Revision);
+                    }
+                    else
+                    {
+                        nbw.Write(one);
+                        nbw.Write(one);
+                        nbw.Write((byte) Endpoint.Protocol.MajorVersion);
+                        nbw.Write((byte) Endpoint.Protocol.MinorVersion);
+                    }
+
+                    var bufferSegment = ms.GetBufferSegment();
+                    await m_netstream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
+                }
+            }
+            finally
+            {
+                semaphoreSlim.Release();
+            }
+        }
+
+        public async Task WriteFrame(OutboundFrame frame)
+        {
+            await semaphoreSlim.WaitAsync();
+            try
+            {
+                using (var ms = new MemoryStream())
+                {
+                    var nbw = new NetworkBinaryWriter(ms);
+                    frame.WriteTo(nbw);
+
+                    var bufferSegment = ms.GetBufferSegment();
+                    await m_netstream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
+                }
+            }
+            finally
+            {
+                semaphoreSlim.Release();
+            }
+        }
+
+        public async Task WriteFrameSet(IList<OutboundFrame> frames)
+        {
+            await semaphoreSlim.WaitAsync();
+            try
+            {
+                using (var ms = new MemoryStream())
+                {
+                    var nbw = new NetworkBinaryWriter(ms);
+                    for (var i = 0; i < frames.Count; ++i)
+                    {
+                        frames[i].WriteTo(nbw);
+                    }
+                    var bufferSegment = ms.GetBufferSegment();
+                    await m_netstream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
+                }
             }
             finally
             {

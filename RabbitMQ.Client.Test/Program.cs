@@ -43,6 +43,7 @@ namespace RabbitMQ.Client.Test
             {
 
                 IModel channel = await conn.CreateModel();
+
                 await channel.ExchangeDeclare("asynctest", "topic");
                 await channel.QueueDeclare("asynctest", true, false, false, null);
                 await channel.QueueBind("asynctest", "asynctest", "asynctest", null);
@@ -72,7 +73,7 @@ namespace RabbitMQ.Client.Test
                 };
                 var consumerTag = await consumchannel.BasicConsume("asynctest", false, consumer);
                 Console.WriteLine($"consumerTag {consumerTag}");
-
+           
                 int id = 0;
                 while (true)
                 {
