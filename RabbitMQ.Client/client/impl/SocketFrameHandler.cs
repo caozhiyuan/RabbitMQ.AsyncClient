@@ -51,6 +51,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Pipelines.Sockets.Unofficial;
 using RabbitMQ.Client.Framing;
+using RabbitMQ.Client.util;
 
 namespace RabbitMQ.Client.Impl
 {
@@ -278,7 +279,7 @@ namespace RabbitMQ.Client.Impl
             await semaphoreSlim.WaitAsync();
             try
             {
-                using (var ms = new MemoryStream())
+                using (var ms = new PooledMemoryStream())
                 {
                     var nbw = new NetworkBinaryWriter(ms);
                     nbw.Write(Amqp);
@@ -298,7 +299,7 @@ namespace RabbitMQ.Client.Impl
                         nbw.Write((byte) Endpoint.Protocol.MinorVersion);
                     }
 
-                    var bufferSegment = ms.GetBufferSegment();
+                    var bufferSegment = ms.ToUnsafeArraySegment();
                     await m_netStream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
                 }
             }
@@ -313,12 +314,12 @@ namespace RabbitMQ.Client.Impl
             await semaphoreSlim.WaitAsync();
             try
             {
-                using (var ms = new MemoryStream())
+                using (var ms = new PooledMemoryStream())
                 {
                     var nbw = new NetworkBinaryWriter(ms);
                     frame.WriteTo(nbw);
 
-                    var bufferSegment = ms.GetBufferSegment();
+                    var bufferSegment = ms.ToUnsafeArraySegment();
                     await m_netStream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
                 }
             }
@@ -333,14 +334,14 @@ namespace RabbitMQ.Client.Impl
             await semaphoreSlim.WaitAsync();
             try
             {
-                using (var ms = new MemoryStream())
+                using (var ms = new PooledMemoryStream())
                 {
                     var nbw = new NetworkBinaryWriter(ms);
                     for (var i = 0; i < frames.Count; ++i)
                     {
                         frames[i].WriteTo(nbw);
                     }
-                    var bufferSegment = ms.GetBufferSegment();
+                    var bufferSegment = ms.ToUnsafeArraySegment();
                     await m_netStream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
                 }
             }
