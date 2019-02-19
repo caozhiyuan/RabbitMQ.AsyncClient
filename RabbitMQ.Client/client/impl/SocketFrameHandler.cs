@@ -56,7 +56,7 @@ namespace RabbitMQ.Client.Impl
 {
     static class TaskExtensions
     {
-        public static Task CompletedTask = Task.FromResult(0);
+        public static readonly Task CompletedTask = Task.FromResult(0);
 
         public static async Task TimeoutAfter(this Task task, int millisecondsTimeout)
         {
@@ -70,7 +70,7 @@ namespace RabbitMQ.Client.Impl
     public class SocketFrameHandler : IFrameHandler
     {
         private SocketConnection socketConnection;
-        private Stream m_netstream;
+        private Stream m_netStream;
         private readonly object _semaphore = new object();
         private bool _closed;
         private readonly Func<AddressFamily, Socket> m_socketFactory;
@@ -124,12 +124,12 @@ namespace RabbitMQ.Client.Impl
 
             socketConnection = SocketConnection.Create(mSocket);
 
-            Stream netstream = StreamConnection.GetDuplex(socketConnection.Input, socketConnection.Output);
+            Stream netStream = StreamConnection.GetDuplex(socketConnection.Input, socketConnection.Output);
             if (endpoint.Ssl.Enabled)
             {
                 try
                 {
-                    netstream = await SslHelper.TcpUpgrade(netstream, endpoint.Ssl);
+                    netStream = await SslHelper.TcpUpgrade(netStream, endpoint.Ssl);
                 }
                 catch (Exception)
                 {
@@ -138,7 +138,7 @@ namespace RabbitMQ.Client.Impl
                 }
             }
 
-            m_netstream = netstream;
+            m_netStream = netStream;
         }
 
         public AmqpTcpEndpoint Endpoint { get; set; }
@@ -215,7 +215,7 @@ namespace RabbitMQ.Client.Impl
 
         public Task<InboundFrame> ReadFrame()
         {
-            return ReadFrom(m_netstream);
+            return ReadFrom(m_netStream);
         }
 
         private async Task<InboundFrame> ReadFrom(Stream reader)
@@ -232,9 +232,7 @@ namespace RabbitMQ.Client.Impl
                     throw new MalformedFrameException("Invalid AMQP protocol header from server");
                 }
 
-                var headerReaderBuffer = new byte[6];
-                Array.Copy(buffer, 1, headerReaderBuffer, 0, 6);
-                headerReader = new NetworkBinaryReader(new MemoryStream(headerReaderBuffer));
+                headerReader = new NetworkBinaryReader(new MemoryStream(buffer, 1, 6));
 
                 int channel = headerReader.ReadUInt16();
                 int payloadSize = headerReader.ReadInt32(); // FIXME - throw exn on unreasonable value
@@ -301,7 +299,7 @@ namespace RabbitMQ.Client.Impl
                     }
 
                     var bufferSegment = ms.GetBufferSegment();
-                    await m_netstream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
+                    await m_netStream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
                 }
             }
             finally
@@ -321,7 +319,7 @@ namespace RabbitMQ.Client.Impl
                     frame.WriteTo(nbw);
 
                     var bufferSegment = ms.GetBufferSegment();
-                    await m_netstream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
+                    await m_netStream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
                 }
             }
             finally
@@ -343,7 +341,7 @@ namespace RabbitMQ.Client.Impl
                         frames[i].WriteTo(nbw);
                     }
                     var bufferSegment = ms.GetBufferSegment();
-                    await m_netstream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
+                    await m_netStream.WriteAsync(bufferSegment.Array, bufferSegment.Offset, bufferSegment.Count);
                 }
             }
             finally

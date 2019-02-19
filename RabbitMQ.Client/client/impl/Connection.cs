@@ -446,10 +446,14 @@ namespace RabbitMQ.Client.Framing.Impl
                 }
             }
 
-            var task = m_appContinuation.WaitAsync();
-            if (await Task.WhenAny(task, Task.Delay(ValidatedTimeout(timeout))) != task)
+            var vTask = m_appContinuation.WaitAsync();
+            if (!vTask.IsCompletedSuccessfully)
             {
-                m_frameHandler.Close();
+                var task = vTask.AsTask();
+                if (await Task.WhenAny(task, Task.Delay(ValidatedTimeout(timeout))) != task)
+                {
+                    m_frameHandler.Close();
+                }
             }
         }
 

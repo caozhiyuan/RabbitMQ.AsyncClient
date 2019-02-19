@@ -72,11 +72,11 @@ namespace RabbitMQ.Client.Impl
 
         public Action Handler { get; set; }
 
-        public override async Task HandleFrame(InboundFrame frame)
+        public override Task HandleFrame(InboundFrame frame)
         {
             if (!m_closing)
             {
-                await base.HandleFrame(frame);
+                return base.HandleFrame(frame);
             }
 
             if (!m_closeServerInitiated && (frame.IsMethod()))
@@ -85,7 +85,7 @@ namespace RabbitMQ.Client.Impl
                 if ((method.ProtocolClassId == m_closeClassId)
                     && (method.ProtocolMethodId == m_closeMethodId))
                 {
-                    await base.HandleFrame(frame);
+                    return base.HandleFrame(frame);
                 }
 
                 if ((method.ProtocolClassId == m_closeOkClassId)
@@ -99,6 +99,7 @@ namespace RabbitMQ.Client.Impl
 
             // Either a non-method frame, or not what we were looking
             // for. Ignore it - we're quiescing.
+            return Task.CompletedTask;
         }
 
         ///<summary> Set channel 0 as quiescing </summary>
@@ -116,11 +117,11 @@ namespace RabbitMQ.Client.Impl
             }
         }
 
-        public override async Task Transmit(Command cmd)
+        public override Task Transmit(Command cmd)
         {
             if (!m_closing)
             {
-                await base.Transmit(cmd);
+                return base.Transmit(cmd);
             }
 
             // Allow always for sending close ok
@@ -133,8 +134,10 @@ namespace RabbitMQ.Client.Impl
                     (method.ProtocolMethodId == m_closeMethodId))
                     ))
             {
-                await base.Transmit(cmd);
+                return base.Transmit(cmd);
             }
+
+            return Task.CompletedTask;
         }
     }
 }

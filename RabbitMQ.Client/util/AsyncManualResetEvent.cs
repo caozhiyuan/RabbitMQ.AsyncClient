@@ -1,5 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace RabbitMQ.Client.util
 {
@@ -11,7 +10,7 @@ namespace RabbitMQ.Client.util
         /// <summary>
         /// The current state of the event.
         /// </summary>
-        private volatile TaskCompletionSource<object> _tcs;
+        private volatile TaskCompletionSource<int> _tcs;
 
         /// <summary>
         /// Creates an async-compatible manual-reset event.
@@ -19,9 +18,9 @@ namespace RabbitMQ.Client.util
         /// <param name="set">Whether the manual-reset event is initially set or unset.</param>
         public AsyncManualResetEvent(bool set)
         {
-            _tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
             if (set)
-                _tcs.TrySetResult(null);
+                _tcs.TrySetResult(1);
         }
 
         /// <summary>
@@ -43,47 +42,9 @@ namespace RabbitMQ.Client.util
         /// <summary>
         /// Asynchronously waits for this event to be set.
         /// </summary>
-        public Task WaitAsync()
+        public ValueTask WaitAsync()
         {
-            return _tcs.Task;
-        }
-
-        /// <summary>
-        /// Asynchronously waits for this event to be set or for the wait to be canceled.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used to cancel the wait. If this token is already canceled, this method will first check whether the event is set.</param>
-        public async Task WaitAsync(CancellationToken cancellationToken)
-        {
-            var waitTask = WaitAsync();
-            if (waitTask.IsCompleted)
-                await waitTask;
-
-            using (var cancelTaskSource = new CancellationTokenTaskSource<object>(cancellationToken))
-            {
-                var task = await Task.WhenAny(waitTask, cancelTaskSource.Task).ConfigureAwait(false);
-                await task;
-            }
-        }
-
-        /// <summary>
-        /// Synchronously waits for this event to be set. This method may block the calling thread.
-        /// </summary>
-        public void Wait()
-        {
-            WaitAsync().GetAwaiter().GetResult();
-        }
-
-        /// <summary>
-        /// Synchronously waits for this event to be set. This method may block the calling thread.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used to cancel the wait. If this token is already canceled, this method will first check whether the event is set.</param>
-        public void Wait(CancellationToken cancellationToken)
-        {
-            var ret = WaitAsync();
-            if (ret.IsCompleted)
-                return;
-
-            ret.Wait(cancellationToken);
+            return new ValueTask(_tcs.Task);
         }
 
         /// <summary>
@@ -91,7 +52,7 @@ namespace RabbitMQ.Client.util
         /// </summary>
         public void Set()
         {
-            _tcs.TrySetResult(null);
+            _tcs.TrySetResult(1);
         }
 
         /// <summary>
@@ -100,7 +61,7 @@ namespace RabbitMQ.Client.util
         public void Reset()
         {
             if (_tcs.Task.IsCompleted)
-                _tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
     }
 }
