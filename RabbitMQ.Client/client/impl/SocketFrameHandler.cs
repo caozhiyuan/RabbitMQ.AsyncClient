@@ -49,7 +49,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Pipelines.Sockets.Unofficial;
 using RabbitMQ.Client.Framing;
 using RabbitMQ.Client.util;
 
@@ -70,7 +69,7 @@ namespace RabbitMQ.Client.Impl
 
     public class SocketFrameHandler : IFrameHandler
     {
-        private SocketConnection socketConnection;
+        private Socket socket;
         private Stream m_netStream;
         private readonly object _semaphore = new object();
         private bool _closed;
@@ -115,17 +114,15 @@ namespace RabbitMQ.Client.Impl
                 mSocket = await ConnectUsingIPv4(endpoint, m_socketFactory, m_connectionTimeout);
             }
 
-            if (mSocket == null)
-            {
-                throw new ArgumentNullException(nameof(mSocket));
-            }
+            socket = mSocket ?? throw new ArgumentNullException(nameof(mSocket));
 
             mSocket.ReceiveTimeout = m_readTimeout;
             mSocket.SendTimeout = m_writeTimeout;
 
-            socketConnection = SocketConnection.Create(mSocket);
+            socket.Blocking = true;
+            Stream netStream = new NetworkStream(mSocket);
+            socket.Blocking = false;
 
-            Stream netStream = StreamConnection.GetDuplex(socketConnection.Input, socketConnection.Output);
             if (endpoint.Ssl.Enabled)
             {
                 try
@@ -146,22 +143,22 @@ namespace RabbitMQ.Client.Impl
 
         public EndPoint LocalEndPoint
         {
-            get { return socketConnection.Socket.LocalEndPoint; }
+            get { return socket.LocalEndPoint; }
         }
 
         public int LocalPort
         {
-            get { return ((IPEndPoint) socketConnection.Socket.LocalEndPoint).Port; }
+            get { return ((IPEndPoint) socket.LocalEndPoint).Port; }
         }
 
         public EndPoint RemoteEndPoint
         {
-            get { return socketConnection.Socket.RemoteEndPoint; }
+            get { return socket.RemoteEndPoint; }
         }
 
         public int RemotePort
         {
-            get { return ((IPEndPoint)socketConnection.Socket.RemoteEndPoint).Port; }
+            get { return ((IPEndPoint)socket.RemoteEndPoint).Port; }
         }
 
         public int ReadTimeout
@@ -170,9 +167,9 @@ namespace RabbitMQ.Client.Impl
             {
                 try
                 {
-                    if (socketConnection.Socket.Connected)
+                    if (socket.Connected)
                     {
-                        socketConnection.Socket.ReceiveTimeout = value;
+                        socket.ReceiveTimeout = value;
                     }
                 }
                 catch (SocketException)
@@ -186,7 +183,7 @@ namespace RabbitMQ.Client.Impl
         {
             set
             {
-                socketConnection.Socket.SendTimeout = value;
+                socket.SendTimeout = value;
             }
         }
 
@@ -198,7 +195,7 @@ namespace RabbitMQ.Client.Impl
                 {
                     try
                     {
-                        socketConnection.Dispose();
+                        socket?.Dispose();
                     }
                     catch (Exception)
                     {
